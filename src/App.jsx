@@ -37,11 +37,6 @@ const BRAND = `
 
   @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.4} }
   @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes shimmer  { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
-  @keyframes layerIn  { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes goldGlow { 0%,100%{opacity:0.5} 50%{opacity:1} }
-  @keyframes scanDown { 0%{top:-2px} 100%{top:100%} }
-  @keyframes dotBlink { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1.2)} }
 
   /* Responsive grid helpers */
   .grid-3col  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
@@ -333,7 +328,6 @@ function PerformanceChart({ reports }) {
 
   // Build data points
   const pts = last12.map((r, i) => ({
-    i, date: r.reportDate,
     spx: parseFloat((r.macroIndicators?.spxChange||"0").replace(/[^0-9.\-+]/g,"")),
     score: r.recommendation?.primarySector?.compositeScore ?? 0,
     regime: r.macroRegime?.quadrant || r.marketRegime,
@@ -454,7 +448,7 @@ function SectorHeatmap({ reports }) {
               return (
                 <div key={ri} style={{ flex:1, height:22, background:c, opacity, borderRadius:2,
                   margin:"0 1px", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  {score!=null && <span style={{ fontSize:15.5, color:"var(--text)", fontFamily:"var(--font-data)",
+                  {score!=null && <span style={{ fontSize:15, color:"var(--text)", fontFamily:"var(--font-data)",
                     opacity:1 }}>{score.toFixed(1)}</span>}
                 </div>
               );
@@ -917,9 +911,6 @@ const ANALYSIS_LAYERS = [
   { id:"↑",  label:"Recommendation",       sub:"Primary overweight · Secondary · Avoid list" },
 ];
 
-// Staggered delays (ms) between each step — slow start, faster middle, slow end
-// Total ≈ 75s which matches median analysis time; last step holds until done
-const STEP_DELAYS = [0, 8000, 9000, 11000, 11000, 10000, 14000, 12000];
 
 function AnalysisScreen({ loadingStep }) {
   const [activeIdx, setActiveIdx] = useState(0);
