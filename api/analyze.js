@@ -1,16 +1,17 @@
 /**
- * /api/analyze — Vercel Edge Function (streaming)
+ * /api/analyze — Vercel Edge Function with SSE streaming proxy
  *
- * Deployed as an Edge Function (not Node.js serverless) so there is NO
- * execution time limit on streaming responses. This is critical because
- * the Anthropic analysis with web_search takes 60–120 seconds.
+ * Uses Anthropic's streaming API (text/event-stream) so:
+ * - First bytes arrive within ~1s, well before any timeout window
+ * - Edge Function streams indefinitely while Anthropic sends events
+ * - No timeout issues regardless of how long web_search takes
  *
- * Security: verifies the signed bb_session HttpOnly cookie before proxying.
+ * The frontend reads the SSE stream and extracts the final message.
  */
 
 export const config = { runtime: "edge" };
 
-// ── Crypto helpers (Web Crypto API — available in Edge Runtime) ───────────────
+// ── Auth helpers ───────────────────────────────────────────────────────────────
 async function hmacSign(secret, message) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -25,8 +26,8 @@ async function hmacSign(secret, message) {
 
 function parseSessionCookie(cookieHeader) {
   if (!cookieHeader) return null;
-  const match = cookieHeader.match(/(?:^|;\s*)bb_session=([^;]+)/);
-  return match ? match[1] : null;
+  const m = cookieHeader.match(/(?:^|;\s*)bb_session=([^;]+)/);
+  return m ? m[1] : null;
 }
 
 async function isAuthenticated(req) {
@@ -37,24 +38,19 @@ async function isAuthenticated(req) {
   const expected = await hmacSign(secret, "bb-auth-session-v1");
   if (token.length !== expected.length) return false;
   let diff = 0;
-  for (let i = 0; i < token.length; i++) {
-    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
+  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
 }
 
-// ── Edge handler ──────────────────────────────────────────────────────────────
+// ── Handler ────────────────────────────────────────────────────────────────────
 export default async function handler(req) {
-  // CORS / method guard
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405, headers: { "Content-Type": "application/json" }
     });
   }
 
-  // Auth check
-  const authed = await isAuthenticated(req);
-  if (!authed) {
+  if (!await isAuthenticated(req)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { "Content-Type": "application/json" }
     });
@@ -62,7 +58,7 @@ export default async function handler(req) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: "Server misconfigured: ANTHROPIC_API_KEY not set" }), {
+    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
       status: 500, headers: { "Content-Type": "application/json" }
     });
   }
@@ -70,25 +66,33 @@ export default async function handler(req) {
   try {
     const body = await req.json();
 
-    // Forward directly to Anthropic — stream the response body back
-    // This keeps the Edge Function alive as long as Anthropic is responding,
-    // with no artificial timeout, regardless of how long web_search takes.
+    // Request streaming from Anthropic (SSE)
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "prompt-caching-2024-07-31", // keeps connection warm
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, stream: true }),
     });
 
-    // Stream the response straight through
+    if (!upstream.ok) {
+      const err = await upstream.json().catch(() => ({ error: { message: "Upstream error" } }));
+      return new Response(JSON.stringify(err), {
+        status: upstream.status,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Stream the SSE response straight through to the browser
     return new Response(upstream.body, {
-      status: upstream.status,
+      status: 200,
       headers: {
-        "Content-Type": upstream.headers.get("content-type") || "application/json",
-        "Cache-Control": "no-store",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-store",
+        "X-Accel-Buffering": "no",
         "X-Content-Type-Options": "nosniff",
       },
     });

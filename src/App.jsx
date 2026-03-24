@@ -770,7 +770,6 @@ function TrendChart({reports}) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [apiKey,setApiKey]=useState(null);
   const [reports,setReports]=useState([]);
   const [currentReport,setCurrentReport]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -781,16 +780,10 @@ export default function App() {
   const [selectedSector,setSelectedSector]=useState(null);
 
   useEffect(()=>{
-    // Load saved reports
     try {
       const s=localStorage.getItem(STORAGE_KEY);
       if(s){ const a=JSON.parse(s); setReports(a); if(a.length) setCurrentReport(a[a.length-1]); }
     } catch(_){}
-    // Fetch API key from secure server endpoint (only works with valid session cookie)
-    fetch("/api/key",{credentials:"same-origin"})
-      .then(r=>{ if(r.status===401){window.location.href="/login";} return r.json(); })
-      .then(d=>{ if(d.key) setApiKey(d.key); })
-      .catch(()=>{}); // will surface as error on analysis attempt
   },[]);
 
   const saveReports=(arr)=>{ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));}catch(_){} setReports(arr); };
@@ -801,14 +794,10 @@ export default function App() {
     let si=0; setLoadingStep(STEPS[0]);
     const timer=setInterval(()=>{ si++; if(si<STEPS.length) setLoadingStep(STEPS[si]); },2500);
     try {
-      if(!apiKey) throw new Error("API key not loaded yet — please refresh the page.");
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-api-key": apiKey,
-          "anthropic-version":"2023-06-01",
-        },
+        headers:{"Content-Type":"application/json"},
+        credentials:"same-origin",
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:6000,
@@ -817,17 +806,52 @@ export default function App() {
           messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively to retrieve all current data for every layer. Score all 11 S&P 500 sector ETFs individually. Output ONLY the JSON report object — no text before or after.`}]
         })
       });
-      clearInterval(timer); setLoadingStep("✅ Processing institutional report…");
-      const data=await res.json();
-      if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
-      const texts=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      if(!texts) throw new Error("No text content returned from API");
-      const report=parseReport(texts);
+
+      if(res.status===401){ clearInterval(timer); window.location.href="/login"; return; }
+      if(!res.ok){
+        const errData=await res.json().catch(()=>({}));
+        throw new Error(errData.error?.message||errData.error||`Server error ${res.status}`);
+      }
+
+      // Parse Anthropic SSE stream — collect all text_delta events + message_stop
+      clearInterval(timer); setLoadingStep("📡 Receiving analysis stream…");
+      const reader=res.body.getReader();
+      const decoder=new TextDecoder();
+      let fullText="";
+      let buffer="";
+
+      while(true){
+        const {done,value}=await reader.read();
+        if(done) break;
+        buffer+=decoder.decode(value,{stream:true});
+        // Process complete SSE lines
+        const lines=buffer.split("\n");
+        buffer=lines.pop()||""; // keep incomplete last line
+        for(const line of lines){
+          if(!line.startsWith("data: ")) continue;
+          const data=line.slice(6).trim();
+          if(data==="[DONE]") break;
+          try{
+            const evt=JSON.parse(data);
+            // Accumulate text deltas
+            if(evt.type==="content_block_delta"&&evt.delta?.type==="text_delta"){
+              fullText+=evt.delta.text||"";
+            }
+            // On message_stop, use accumulated content
+            if(evt.type==="message_delta"&&evt.usage) {
+              setLoadingStep("✅ Processing institutional report…");
+            }
+          }catch(_){}
+        }
+      }
+
+      if(!fullText) throw new Error("No content received from analysis stream");
+      const report=parseReport(fullText);
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
       saveReports(updated); setCurrentReport(report);
     } catch(err) {
       clearInterval(timer);
-      setError(err.message||"Analysis failed. Check API key and try again.");
+      setError(err.message||"Analysis failed. Please try again.");
     } finally { setLoading(false); setLoadingStep(""); }
   };
 
