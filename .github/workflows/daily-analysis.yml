@@ -1,0 +1,71 @@
+name: Daily Market Analysis
+
+on:
+  schedule:
+    # 9:00 AM UTC = 5:00 AM ET / 2:00 AM PT
+    # Change the hour to suit your timezone:
+    #   New York  (ET)  = UTC+5 in summer,  UTC+4 in winter  → use 14:00 for 9am ET
+    #   London    (GMT) = UTC   in winter,  UTC+1 in summer  → use 09:00 for 9am GMT
+    #   Hong Kong (HKT) = UTC+8 always                       → use 01:00 for 9am HKT
+    - cron: '0 14 * * 1-5'   # 9:00 AM ET, weekdays only (Mon-Fri)
+
+  # Also allow manual trigger from the GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force run even if report already exists today'
+        required: false
+        default: 'false'
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # Kill if Vercel/Claude hangs
+
+    steps:
+      - name: Trigger BlackBridge Daily Analysis
+        env:
+          DEPLOYMENT_URL: ${{ secrets.BLACKBRIDGE_URL }}
+          TRIGGER_SECRET: ${{ secrets.BLACKBRIDGE_TRIGGER_SECRET }}
+        run: |
+          echo "Triggering analysis at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --max-time 300 \
+            -X POST "$DEPLOYMENT_URL/api/trigger-daily" \
+            -H "Content-Type: application/json" \
+            -H "X-Trigger-Secret: $TRIGGER_SECRET" \
+            -d "{\"force\": ${{ github.event.inputs.force || 'false' }}}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Analysis failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          # Extract key fields from the JSON response for the summary
+          echo "$BODY" | python3 -c "
+          import json, sys
+          try:
+              d = json.load(sys.stdin)
+              r = d.get('report', {})
+              rec = r.get('recommendation', {})
+              ps = rec.get('primarySector', {})
+              print(f'Date:         {r.get(\"reportDate\", \"?\")}')
+              print(f'Regime:       {r.get(\"macroRegime\", {}).get(\"quadrant\", \"?\")}')
+              print(f'Cycle:        {r.get(\"businessCycle\", {}).get(\"phase\", \"?\")}')
+              print(f'Top pick:     {ps.get(\"ticker\", \"?\")} — {ps.get(\"name\", \"?\")}')
+              print(f'Conviction:   {ps.get(\"conviction\", \"?\")}')
+              print(f'Score:        {ps.get(\"compositeScore\", \"?\")}')
+              print(f'Tail risk:    {r.get(\"tailRisk\", {}).get(\"compositeScore\", \"?\")} / 100')
+              print(f'Thesis:       {ps.get(\"thesis\", \"\")[:120]}...')
+          except Exception as e:
+              print(f'Could not parse summary: {e}')
+          " || echo "Summary parse skipped"
+
+          echo "Analysis complete."
