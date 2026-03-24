@@ -37,9 +37,14 @@ const BRAND = `
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-  @keyframes spin  { to { transform: rotate(360deg); } }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin     { to { transform: rotate(360deg); } }
+  @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes shimmer  { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+  @keyframes layerIn  { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes goldGlow { 0%,100%{opacity:0.5} 50%{opacity:1} }
+  @keyframes scanDown { 0%{top:-2px} 100%{top:100%} }
+  @keyframes dotBlink { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1.2)} }
 `;
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -186,11 +191,11 @@ function MacroTile({ label, value, sub, trend }) {
   return (
     <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6,
       padding:"10px 14px", minWidth:100, flexShrink:0 }}>
-      <div style={{ fontSize:8, color:"var(--text3)", letterSpacing:"0.14em", textTransform:"uppercase",
+      <div style={{ fontSize:14, color:"var(--text3)", letterSpacing:"0.14em", textTransform:"uppercase",
         fontFamily:"var(--font-data)", marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:16, fontWeight:500, color:"var(--text)", fontFamily:"var(--font-data)",
         letterSpacing:"-0.02em" }}>{value||"—"}</div>
-      {sub && <div style={{ fontSize:10, color:trendColor, fontFamily:"var(--font-data)", marginTop:2 }}>{sub}</div>}
+      {sub && <div style={{ fontSize:16, color:trendColor, fontFamily:"var(--font-data)", marginTop:2 }}>{sub}</div>}
     </div>
   );
 }
@@ -209,7 +214,7 @@ function Card({ children, style={}, accent=false }) {
 
 function SectionLabel({ children }) {
   return (
-    <div style={{ fontSize:9, color:"var(--gold)", letterSpacing:"0.16em", textTransform:"uppercase",
+    <div style={{ fontSize:15, color:"var(--gold)", letterSpacing:"0.16em", textTransform:"uppercase",
       fontFamily:"var(--font-data)", fontWeight:500, marginBottom:14, paddingBottom:8,
       borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:8 }}>
       <span style={{ width:16, height:1, background:"var(--gold)", display:"inline-block" }}/>
@@ -229,7 +234,7 @@ function ScoreMeter({ score, size=40 }) {
         display:"flex", alignItems:"center", justifyContent:"center", background:c+"12" }}>
         <span style={{ fontSize:size*0.21, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{label}</span>
       </div>
-      {score!=null && <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)" }}>{score.toFixed(2)}</span>}
+      {score!=null && <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)" }}>{score.toFixed(2)}</span>}
     </div>
   );
 }
@@ -241,8 +246,8 @@ function LayerBar({ label, score }) {
   return (
     <div style={{ marginBottom:6 }}>
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-        <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{label}</span>
-        <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>
+        <span style={{ fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{label}</span>
+        <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>
           {score!=null ? score.toFixed(2) : "—"}
         </span>
       </div>
@@ -266,10 +271,10 @@ function FactorRow({ label, value, signal }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
       padding:"5px 0", borderBottom:"1px solid var(--border)" }}>
-      <span style={{ fontSize:10, color:"var(--text3)", fontFamily:"var(--font-body)" }}>{label}</span>
+      <span style={{ fontSize:16, color:"var(--text3)", fontFamily:"var(--font-body)" }}>{label}</span>
       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-        {value && <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{value}</span>}
-        <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{signal||"—"}</span>
+        {value && <span style={{ fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{value}</span>}
+        <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{signal||"—"}</span>
       </div>
     </div>
   );
@@ -280,7 +285,7 @@ function PerformanceChart({ reports }) {
   const containerRef = useRef(null);
   if (reports.length < 2) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:160,
-      color:"var(--text3)", fontSize:11, fontFamily:"var(--font-data)" }}>
+      color:"var(--text3)", fontSize:14, fontFamily:"var(--font-data)" }}>
       Run 2+ reports to see performance chart
     </div>
   );
@@ -322,11 +327,11 @@ function PerformanceChart({ reports }) {
       <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:5 }}>
           <div style={{ width:20, height:2, background:"var(--green)", borderRadius:1 }}/>
-          <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>S&P 500 Daily %</span>
+          <span style={{ fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>S&P 500 Daily %</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:5 }}>
           <div style={{ width:20, height:2, background:"var(--gold)", borderRadius:1, borderTop:"1px dashed var(--gold)" }}/>
-          <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Primary Sector Score</span>
+          <span style={{ fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Primary Sector Score</span>
         </div>
       </div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
@@ -367,7 +372,7 @@ function PerformanceChart({ reports }) {
               <circle cx={x} cy={scorePoints[i].y} r="3" fill="var(--gold)"/>
               {/* Sector label */}
               <text x={x} y={H-4} textAnchor="middle" fill="var(--text3)"
-                fontSize="7" fontFamily="var(--font-data)">{p.sector}</text>
+                fontSize="9" fontFamily="var(--font-data)">{p.sector}</text>
               {/* Regime dot at bottom */}
               <circle cx={x} cy={H-14} r="2.5" fill={c} opacity="0.7"/>
             </g>
@@ -375,8 +380,8 @@ function PerformanceChart({ reports }) {
         })}
 
         {/* Y axis labels */}
-        <text x={PAD.left-4} y={PAD.top+5} textAnchor="end" fill="var(--text3)" fontSize="7" fontFamily="var(--font-data)">+</text>
-        <text x={PAD.left-4} y={PAD.top+innerH} textAnchor="end" fill="var(--text3)" fontSize="7" fontFamily="var(--font-data)">−</text>
+        <text x={PAD.left-4} y={PAD.top+5} textAnchor="end" fill="var(--text3)" fontSize="9" fontFamily="var(--font-data)">+</text>
+        <text x={PAD.left-4} y={PAD.top+innerH} textAnchor="end" fill="var(--text3)" fontSize="9" fontFamily="var(--font-data)">−</text>
       </svg>
     </div>
   );
@@ -396,7 +401,7 @@ function SectorHeatmap({ reports }) {
         <div style={{ display:"flex", marginBottom:4 }}>
           <div style={{ width:40, flexShrink:0 }}/>
           {last8.map((r,i) => (
-            <div key={i} style={{ flex:1, textAlign:"center", fontSize:8, color:"var(--text3)", fontFamily:"var(--font-data)" }}>
+            <div key={i} style={{ flex:1, textAlign:"center", fontSize:14, color:"var(--text3)", fontFamily:"var(--font-data)" }}>
               {fmtDate(r.reportDate, true)}
             </div>
           ))}
@@ -404,7 +409,7 @@ function SectorHeatmap({ reports }) {
         {/* Sector rows */}
         {SECTOR_TICKERS.map((ticker, si) => (
           <div key={ticker} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
-            <div style={{ width:40, fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)", flexShrink:0 }}>
+            <div style={{ width:40, fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)", flexShrink:0 }}>
               {SECTOR_SHORT[si]}
             </div>
             {last8.map((r, ri) => {
@@ -415,7 +420,7 @@ function SectorHeatmap({ reports }) {
               return (
                 <div key={ri} style={{ flex:1, height:22, background:c, opacity, borderRadius:2,
                   margin:"0 1px", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  {score!=null && <span style={{ fontSize:7.5, color:"var(--text)", fontFamily:"var(--font-data)",
+                  {score!=null && <span style={{ fontSize:15.5, color:"var(--text)", fontFamily:"var(--font-data)",
                     opacity:2.5 }}>{score.toFixed(1)}</span>}
                 </div>
               );
@@ -424,7 +429,7 @@ function SectorHeatmap({ reports }) {
         ))}
         {/* Regime row */}
         <div style={{ display:"flex", alignItems:"center", marginTop:6 }}>
-          <div style={{ width:40, fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Regime</div>
+          <div style={{ width:40, fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Regime</div>
           {last8.map((r,i) => {
             const q = r.macroRegime?.quadrant||r.marketRegime;
             const c = REGIME_COLORS[q]||"var(--text3)";
@@ -452,7 +457,7 @@ function MacroQuadrantWidget({ mr }) {
         ].map(({x,y,l,c})=>(
           <div key={l} style={{position:"absolute",left:x+"%",top:y+"%",width:"50%",height:"50%",
             background:c+"10",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:7,color:c,fontFamily:"var(--font-data)",opacity:0.6}}>{l}</span>
+            <span style={{fontSize:15,color:c,fontFamily:"var(--font-data)",opacity:0.6}}>{l}</span>
           </div>
         ))}
         <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"var(--border)"}}/>
@@ -465,7 +470,7 @@ function MacroQuadrantWidget({ mr }) {
       <div style={{flex:1}}>
         <RegimeBadge regime={mr.quadrant}/>
         {mr.regimeConfidence != null && (
-          <div style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:5}}>
+          <div style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:5}}>
             Confidence: <span style={{color:mr.regimeConfidence>0.6?"var(--green)":"var(--amber)"}}>
               {Math.round(mr.regimeConfidence*100)}%
             </span>
@@ -474,8 +479,8 @@ function MacroQuadrantWidget({ mr }) {
         <div style={{display:"flex",gap:12,marginTop:6}}>
           {[["Growth",mr.growthMomentum],["Inflation",mr.inflationMomentum]].map(([l,v])=>(
             <div key={l}>
-              <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:2}}>{l}</div>
-              <div style={{fontSize:10,fontFamily:"var(--font-data)",fontWeight:500,
+              <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:2}}>{l}</div>
+              <div style={{fontSize:16,fontFamily:"var(--font-data)",fontWeight:500,
                 color:{RISING:"var(--green)",FALLING:"var(--red)",STABLE:"var(--platinum)"}[v]||"var(--platinum)"}}>
                 {v||"—"}
               </div>
@@ -483,7 +488,7 @@ function MacroQuadrantWidget({ mr }) {
           ))}
         </div>
         {mr.regimeNarrative && (
-          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",
+          <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-body)",
             lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>{mr.regimeNarrative}</div>
         )}
       </div>
@@ -508,7 +513,7 @@ function InvestmentClockWidget({ bc }) {
           ].map(({d,c,l,lx,ly})=>(
             <g key={l}>
               <path d={d} fill={c}/>
-              <text x={lx} y={ly} textAnchor="middle" fill="var(--text3)" fontSize="5" fontFamily="var(--font-data)">{l}</text>
+              <text x={lx} y={ly} textAnchor="middle" fill="var(--text3)" fontSize="9" fontFamily="var(--font-data)">{l}</text>
             </g>
           ))}
           <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border)" strokeWidth="1"/>
@@ -520,25 +525,25 @@ function InvestmentClockWidget({ bc }) {
           })}
           <line x1="50" y1="50" x2={hx} y2={hy} stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
           <circle cx={hx} cy={hy} r="2.5" fill="var(--gold)"/>
-          <text x="50" y="54" textAnchor="middle" fill="var(--gold)" fontSize="5.5" fontFamily="var(--font-data)">{pos}:00</text>
+          <text x="50" y="54" textAnchor="middle" fill="var(--gold)" fontSize="9" fontFamily="var(--font-data)">{pos}:00</text>
         </svg>
       </div>
       <div style={{flex:1}}>
-        <div style={{fontSize:13,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",marginBottom:6}}>
+        <div style={{fontSize:16,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",marginBottom:6}}>
           {bc.phase?.replace(/_/g," ")||"—"}
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
           {bc.ismPMI && (
-            <span style={{fontSize:9,color:parseFloat(bc.ismPMI)>50?"var(--green)":"var(--red)",
+            <span style={{fontSize:15,color:parseFloat(bc.ismPMI)>50?"var(--green)":"var(--red)",
               fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",
               borderRadius:3,padding:"1px 7px"}}>PMI {bc.ismPMI}</span>
           )}
-          <span style={{fontSize:9,color:{STEEPENING:"var(--green)",INVERTED:"var(--red)",FLAT:"var(--amber)"}[bc.yieldCurveSignal]||"var(--platinum)",
+          <span style={{fontSize:15,color:{STEEPENING:"var(--green)",INVERTED:"var(--red)",FLAT:"var(--amber)"}[bc.yieldCurveSignal]||"var(--platinum)",
             fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",
             borderRadius:3,padding:"1px 7px"}}>CURVE {bc.yieldCurveSignal||"—"}</span>
         </div>
         {bc.cycleNarrative && (
-          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
+          <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
             {bc.cycleNarrative}
           </div>
         )}
@@ -562,15 +567,15 @@ function CreditPanel({ cl }) {
           {l:"MOVE",v:cl.moveIndex,c:parseInt(cl.moveIndex)>150?"var(--red)":"var(--platinum)"},
         ].map(({l,v,c,s})=>(
           <div key={l} style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:5,padding:"8px 10px"}}>
-            <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:3,letterSpacing:"0.1em"}}>{l}</div>
+            <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:3,letterSpacing:"0.1em"}}>{l}</div>
             <div style={{fontSize:14,fontWeight:500,color:c,fontFamily:"var(--font-data)"}}>{v||"—"}</div>
-            {s && <div style={{fontSize:8,color:c,fontFamily:"var(--font-data)",marginTop:1}}>{s}</div>}
+            {s && <div style={{fontSize:14,color:c,fontFamily:"var(--font-data)",marginTop:1}}>{s}</div>}
           </div>
         ))}
       </div>
       {/* HY threshold bar */}
       <div style={{marginBottom:8}}>
-        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:4,letterSpacing:"0.1em"}}>HY OAS REGIME THRESHOLDS</div>
+        <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:4,letterSpacing:"0.1em"}}>HY OAS REGIME THRESHOLDS</div>
         <div style={{display:"flex",height:5,borderRadius:2,overflow:"hidden",gap:1}}>
           {[["TIGHT",20,"var(--green)"],["NORMAL",30,"#4DB887"],["ELEVATED",15,"var(--amber)"],["STRESS",20,"var(--amber2)"],["CRISIS",15,"var(--red)"]].map(([l,w,c])=>(
             <div key={l} style={{flex:w,background:c,opacity:cl.hyOASRegime===l?1:0.2,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -580,7 +585,7 @@ function CreditPanel({ cl }) {
         </div>
       </div>
       {cl.liquidityNarrative && (
-        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
+        <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
           {cl.liquidityNarrative}
         </div>
       )}
@@ -607,12 +612,12 @@ function TailRiskWidget({ tailRisk }) {
           </svg>
           <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
             <span style={{fontSize:14,fontWeight:700,color:c,fontFamily:"var(--font-data)"}}>{sc}</span>
-            <span style={{fontSize:7,color:c,fontFamily:"var(--font-data)"}}>/ 100</span>
+            <span style={{fontSize:15,color:c,fontFamily:"var(--font-data)"}}>/ 100</span>
           </div>
         </div>
         <div>
           <div style={{fontSize:15,fontWeight:600,color:c,fontFamily:"var(--font-display)"}}>{tailRisk.regime}</div>
-          <div style={{fontSize:9,color:"var(--text3)",marginTop:2}}>
+          <div style={{fontSize:15,color:"var(--text3)",marginTop:2}}>
             Dampener: <span style={{color:c,fontFamily:"var(--font-data)"}}>{tailRisk.dampener?.toFixed(2)||"1.00"}×</span>
           </div>
         </div>
@@ -624,8 +629,8 @@ function TailRiskWidget({ tailRisk }) {
           return (
             <div key={k} style={{marginBottom:5}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                <span style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{label}</span>
-                <span style={{fontSize:8,color:bc,fontFamily:"var(--font-data)",fontWeight:500}}>{v}</span>
+                <span style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{label}</span>
+                <span style={{fontSize:14,color:bc,fontFamily:"var(--font-data)",fontWeight:500}}>{v}</span>
               </div>
               <div style={{height:2,background:"var(--bg4)",borderRadius:1,overflow:"hidden"}}>
                 <div style={{width:v+"%",height:"100%",background:bc,borderRadius:1}}/>
@@ -635,7 +640,7 @@ function TailRiskWidget({ tailRisk }) {
         })}
       </div>
       <div>
-        <div style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",marginBottom:7}}>
+        <div style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",marginBottom:7}}>
           BLACK SWAN CHECKLIST
         </div>
         {[
@@ -647,8 +652,8 @@ function TailRiskWidget({ tailRisk }) {
           ["Yield Curve Inversion",  !bsc.yieldCurveInversion],
         ].map(([label,ok])=>(
           <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid var(--border)"}}>
-            <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-body)"}}>{label}</span>
-            <span style={{fontSize:9,color:ok?"var(--green)":"var(--amber)",fontFamily:"var(--font-data)"}}>
+            <span style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-body)"}}>{label}</span>
+            <span style={{fontSize:15,color:ok?"var(--green)":"var(--amber)",fontFamily:"var(--font-data)"}}>
               {ok ? "✓ CLEAR" : "⚠ ALERT"}
             </span>
           </div>
@@ -666,15 +671,15 @@ function SectorRow({ s, onSelect, selected }) {
     <div onClick={()=>onSelect(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",
       borderBottom:"1px solid var(--border)",cursor:"pointer",background:selected?"var(--bg3)":"transparent",
       borderRadius:4,transition:"background 0.1s"}}>
-      <div style={{width:36,fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
-      <div style={{flex:1,fontSize:11,color:"var(--text2)",fontFamily:"var(--font-body)"}}>{s.name}</div>
+      <div style={{width:36,fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
+      <div style={{flex:1,fontSize:14,color:"var(--text2)",fontFamily:"var(--font-body)"}}>{s.name}</div>
       <div style={{width:48,height:3,background:"var(--bg4)",borderRadius:1,overflow:"hidden"}}>
         <div style={{width:scoreBar(s.compositeScore)+"%",height:"100%",background:sc,borderRadius:1}}/>
       </div>
-      <div style={{width:30,textAlign:"right",fontSize:9,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>
+      <div style={{width:30,textAlign:"right",fontSize:15,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>
         {s.compositeScore!=null?s.compositeScore.toFixed(1):"—"}
       </div>
-      <div style={{fontSize:9,fontWeight:500,color:ss.text,background:ss.bg,
+      <div style={{fontSize:15,fontWeight:500,color:ss.text,background:ss.bg,
         border:`1px solid ${ss.border}`,borderRadius:3,padding:"1px 5px",
         fontFamily:"var(--font-data)",minWidth:26,textAlign:"center"}}>
         {signalShort(s.signal)}
@@ -687,7 +692,7 @@ function SectorRow({ s, onSelect, selected }) {
 function SectorDetailPanel({ s }) {
   if (!s) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",
-      color:"var(--text3)",fontSize:11,fontFamily:"var(--font-data)"}}>
+      color:"var(--text3)",fontSize:14,fontFamily:"var(--font-data)"}}>
       Select a sector ↑
     </div>
   );
@@ -698,19 +703,19 @@ function SectorDetailPanel({ s }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
           <div style={{fontSize:15,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)"}}>{s.name}</div>
-          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
+          <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
         </div>
         <ScoreMeter score={s.compositeScore} size={42}/>
       </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-        {s.confidence!=null && <span style={{fontSize:8,color:s.confidence>0.65?"var(--green)":"var(--amber)",
+        {s.confidence!=null && <span style={{fontSize:14,color:s.confidence>0.65?"var(--green)":"var(--amber)",
           fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:3,padding:"1px 6px"}}>
           {Math.round(s.confidence*100)}% CONF</span>}
-        {s.primaryDriver && <span style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",
+        {s.primaryDriver && <span style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",
           background:"var(--bg3)",border:"1px solid var(--gold-dim)",borderRadius:3,padding:"1px 6px"}}>{s.primaryDriver}</span>}
       </div>
       <div style={{marginBottom:10}}>
-        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>LAYER SCORES</div>
+        <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>LAYER SCORES</div>
         <LayerBar label="L1 Macro Regime" score={ls.l1MacroRegime}/>
         <LayerBar label="L2 Cycle Tilt"   score={ls.l2CycleTilt}/>
         <LayerBar label="L3 Credit/Liq"   score={ls.l3CreditLiq}/>
@@ -718,7 +723,7 @@ function SectorDetailPanel({ s }) {
         <LayerBar label="L5 Technicals"   score={ls.l5Technicals}/>
       </div>
       <div style={{marginBottom:10}}>
-        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>FACTOR SCORES</div>
+        <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>FACTOR SCORES</div>
         <FactorRow label="Momentum (12-1m)"    value={f.momentum12m1} signal={f.momentum}/>
         <FactorRow label="Valuation (Fwd P/E)" value={f.fwdPERelative} signal={f.value}/>
         <FactorRow label="Quality (ROE/Debt)"  signal={f.quality}/>
@@ -730,12 +735,12 @@ function SectorDetailPanel({ s }) {
         <FactorRow label="vs SPX"       signal={f.relStrengthVsSPX}/>
       </div>
       {s.catalyst && <div style={{marginBottom:8}}>
-        <div style={{fontSize:8,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYST</div>
-        <div style={{fontSize:10,color:"var(--text3)",lineHeight:1.5}}>{s.catalyst}</div>
+        <div style={{fontSize:14,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYST</div>
+        <div style={{fontSize:16,color:"var(--text3)",lineHeight:1.5}}>{s.catalyst}</div>
       </div>}
       {s.risk && <div>
-        <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ RISK</div>
-        <div style={{fontSize:10,color:"var(--text3)",lineHeight:1.5}}>{s.risk}</div>
+        <div style={{fontSize:14,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ RISK</div>
+        <div style={{fontSize:16,color:"var(--text3)",lineHeight:1.5}}>{s.risk}</div>
       </div>}
     </div>
   );
@@ -752,37 +757,37 @@ function RecCard({ rec, primary }) {
         background:"linear-gradient(90deg,var(--gold),var(--gold2))"}}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
-          <div style={{fontSize:9,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:6}}>
+          <div style={{fontSize:15,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:6}}>
             {primary ? "PRIMARY OVERWEIGHT" : "SECONDARY OVERWEIGHT"}
           </div>
-          <div style={{fontSize:22,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",
+          <div style={{fontSize:26,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",
             letterSpacing:"-0.02em",lineHeight:1}}>{rec.name}</div>
-          <div style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:3}}>{rec.ticker}</div>
+          <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:3}}>{rec.ticker}</div>
         </div>
         <ScoreMeter score={rec.compositeScore} size={42}/>
       </div>
-      <div style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.7,marginBottom:12}}>
+      <div style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.7,marginBottom:12}}>
         {rec.thesis}
       </div>
       {rec.catalysts?.length>0 && (
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:8,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYSTS</div>
-          {rec.catalysts.map((c,i)=><div key={i} style={{fontSize:10,color:"var(--text3)",marginBottom:2}}>· {c}</div>)}
+          <div style={{fontSize:14,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYSTS</div>
+          {rec.catalysts.map((c,i)=><div key={i} style={{fontSize:16,color:"var(--text3)",marginBottom:2}}>· {c}</div>)}
         </div>
       )}
       {rec.keyRisks?.length>0 && (
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ KEY RISKS</div>
-          {rec.keyRisks.map((r,i)=><div key={i} style={{fontSize:10,color:"var(--text3)",marginBottom:2}}>· {r}</div>)}
+          <div style={{fontSize:14,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ KEY RISKS</div>
+          {rec.keyRisks.map((r,i)=><div key={i} style={{fontSize:16,color:"var(--text3)",marginBottom:2}}>· {r}</div>)}
         </div>
       )}
       <div style={{background:"var(--bg)",borderRadius:5,padding:"9px 12px",
-        borderLeft:`2px solid ${convC}`,fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
+        borderLeft:`2px solid ${convC}`,fontSize:16,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
         <span style={{color:convC,fontFamily:"var(--font-data)",fontWeight:500}}>ENTRY: </span>{rec.entryRationale}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",marginTop:10,alignItems:"center"}}>
-        <span style={{fontSize:9,color:convC,fontFamily:"var(--font-data)"}}>{rec.conviction} CONVICTION</span>
-        <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{rec.timeHorizon}</span>
+        <span style={{fontSize:15,color:convC,fontFamily:"var(--font-data)"}}>{rec.conviction} CONVICTION</span>
+        <span style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{rec.timeHorizon}</span>
       </div>
     </div>
   );
@@ -795,19 +800,19 @@ function NewsItem({ item }) {
     <div style={{padding:"10px 0",borderBottom:"1px solid var(--border)",display:"flex",gap:12}}>
       <div style={{width:2,background:c,borderRadius:1,flexShrink:0}}/>
       <div style={{flex:1}}>
-        <div style={{fontSize:12,color:"var(--text)",fontFamily:"var(--font-body)",lineHeight:1.55,marginBottom:4}}>
+        <div style={{fontSize:15,color:"var(--text)",fontFamily:"var(--font-body)",lineHeight:1.55,marginBottom:4}}>
           {item.headline}
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <span style={{fontSize:9,color:"var(--text3)"}}>{item.source}</span>
+          <span style={{fontSize:15,color:"var(--text3)"}}>{item.source}</span>
           {item.sectorImpact?.slice(0,3).map(t=>(
-            <span key={t} style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",
+            <span key={t} style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",
               background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:2,padding:"0 4px"}}>{t}</span>
           ))}
-          <span style={{fontSize:9,color:c,fontFamily:"var(--font-data)",fontWeight:500}}>{item.sentiment}</span>
-          {item.macroRelevance==="HIGH" && <span style={{fontSize:8,color:"var(--amber)",fontFamily:"var(--font-data)"}}>MACRO</span>}
+          <span style={{fontSize:15,color:c,fontFamily:"var(--font-data)",fontWeight:500}}>{item.sentiment}</span>
+          {item.macroRelevance==="HIGH" && <span style={{fontSize:14,color:"var(--amber)",fontFamily:"var(--font-data)"}}>MACRO</span>}
         </div>
-        {item.impact && <div style={{fontSize:10,color:"var(--text3)",marginTop:4,lineHeight:1.45,fontFamily:"var(--font-body)"}}>{item.impact}</div>}
+        {item.impact && <div style={{fontSize:16,color:"var(--text3)",marginTop:4,lineHeight:1.45,fontFamily:"var(--font-body)"}}>{item.impact}</div>}
       </div>
     </div>
   );
@@ -822,18 +827,18 @@ function EventItem({ item }) {
       <div style={{width:7,height:7,borderRadius:"50%",background:ic,marginTop:4,flexShrink:0,boxShadow:`0 0 4px ${ic}`}}/>
       <div style={{flex:1}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <div style={{fontSize:11,color:"var(--text)",fontFamily:"var(--font-body)",fontWeight:400}}>{item.event}</div>
+          <div style={{fontSize:14,color:"var(--text)",fontFamily:"var(--font-body)",fontWeight:400}}>{item.event}</div>
           <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
-            {item.surprise && <span style={{fontSize:8,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>{item.surprise}</span>}
-            <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{item.date}</span>
+            {item.surprise && <span style={{fontSize:14,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>{item.surprise}</span>}
+            <span style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{item.date}</span>
           </div>
         </div>
         {(item.actual||item.expected) && (
-          <div style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:2}}>
+          <div style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:2}}>
             {item.actual&&`A: ${item.actual}`}{item.expected&&` · E: ${item.expected}`}{item.prior&&` · P: ${item.prior}`}
           </div>
         )}
-        {item.marketImplication && <div style={{fontSize:10,color:"var(--text3)",marginTop:3,lineHeight:1.4,fontFamily:"var(--font-body)"}}>{item.marketImplication}</div>}
+        {item.marketImplication && <div style={{fontSize:16,color:"var(--text3)",marginTop:3,lineHeight:1.4,fontFamily:"var(--font-body)"}}>{item.marketImplication}</div>}
       </div>
     </div>
   );
@@ -859,8 +864,222 @@ function MacroSparkline({ reports, field, label, color="var(--green)" }) {
         <circle cx={(vals.length-1)/(vals.length-1)*W} cy={H-((last-min)/range)*H} r="2" fill={color}/>
       </svg>
       <div>
-        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{label}</div>
-        <div style={{fontSize:10,color:tC,fontFamily:"var(--font-data)"}}>{trend} {last.toFixed(2)}</div>
+        <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{label}</div>
+        <div style={{fontSize:16,color:tC,fontFamily:"var(--font-data)"}}>{trend} {last.toFixed(2)}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ANALYSIS SCREEN ─────────────────────────────────────────────────────────
+const ANALYSIS_LAYERS = [
+  { id:"L1", label:"Macro Regime Detection",    sub:"Bridgewater Growth/Inflation Quadrant · AQR 5-Factor",  icon:"◈" },
+  { id:"L2", label:"Business Cycle Mapping",    sub:"Fidelity AART · Merrill Lynch Investment Clock",        icon:"◷" },
+  { id:"L3", label:"Credit & Liquidity Scan",   sub:"HY/IG OAS · Chicago Fed NFCI · VIX Structure",         icon:"◉" },
+  { id:"L4", label:"Fundamental Factor Scoring",sub:"Momentum · Value · Quality · ERB · Low-Vol · Carry",    icon:"◎" },
+  { id:"L5", label:"Technical Overlays",        sub:"RSI(14) · MACD · 200-DMA · Breadth · Rel. Strength",   icon:"◐" },
+  { id:"L6", label:"Tail Risk & Black Swan",    sub:"BIS Early Warning · Dalio Gauge · Soros Reflexivity",  icon:"◍" },
+  { id:"∑",  label:"Composite Scoring",         sub:"Strategic × Tactical · Tail Dampener",                  icon:"⊛" },
+  { id:"↑",  label:"Sector Recommendation",     sub:"Primary Overweight · Secondary · Avoid List",           icon:"◆" },
+];
+
+function AnalysisScreen({ loadingStep }) {
+  const [elapsed, setElapsed]     = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [particles, setParticles] = useState([]);
+  const startRef = useRef(Date.now());
+
+  // Determine which layer is active from loadingStep string
+  useEffect(() => {
+    const STEP_LABELS = ANALYSIS_LAYERS.map(l=>l.label);
+    const stepMap = {
+      "L1 · Scanning macro regime…": 0,
+      "L2 · Mapping business cycle…": 1,
+      "L3 · Credit & liquidity scan…": 2,
+      "L4 · Factor scoring 11 sectors…": 3,
+      "L5 · Technical overlays…": 4,
+      "L6 · Tail risk computation…": 5,
+      "Composite scoring…": 6,
+      "Generating recommendation…": 7,
+      "Receiving analysis…": 7,
+    };
+    const idx = stepMap[loadingStep];
+    if (idx !== undefined) setActiveIdx(idx);
+  }, [loadingStep]);
+
+  // Elapsed timer
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(Math.floor((Date.now()-startRef.current)/1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Generate floating particles once
+  useEffect(() => {
+    setParticles(Array.from({length:24}, (_, i) => ({
+      id: i,
+      x: Math.random()*100,
+      y: Math.random()*100,
+      size: 1 + Math.random()*2,
+      dur: 3 + Math.random()*6,
+      delay: Math.random()*4,
+      opacity: 0.1 + Math.random()*0.3,
+    })));
+  }, []);
+
+  const progress = Math.round(((activeIdx + 1) / ANALYSIS_LAYERS.length) * 100);
+  const mins = Math.floor(elapsed/60);
+  const secs = elapsed % 60;
+  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  return (
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",
+      justifyContent:"center",position:"relative",overflow:"hidden"}}>
+
+      {/* Ambient grid */}
+      <div style={{position:"absolute",inset:0,backgroundImage:
+        "linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px)",
+        backgroundSize:"48px 48px",opacity:0.3}}/>
+
+      {/* Scanline */}
+      <div style={{position:"absolute",left:0,right:0,height:2,
+        background:"linear-gradient(90deg,transparent,var(--gold),transparent)",
+        opacity:0.3,animation:"scanDown 4s linear infinite",top:0}}/>
+
+      {/* Floating particles */}
+      {particles.map(p => (
+        <div key={p.id} style={{position:"absolute",left:p.x+"%",top:p.y+"%",
+          width:p.size,height:p.size,borderRadius:"50%",background:"var(--gold)",
+          opacity:p.opacity,animation:`pulse ${p.dur}s ${p.delay}s ease-in-out infinite`}}/>
+      ))}
+
+      {/* Corner decorations */}
+      {[[0,0,"0 0 0 0","0 0 1px 0"],[0,1,"0 0 0 0","0 0 0 1px"],[1,0,"0 0 0 0","0 0 1px 0"],[1,1,"0 0 0 0","0 0 0 1px"]].map(([r,c],i) => (
+        <div key={i} style={{position:"absolute",
+          top: r===0 ? 32 : "auto", bottom: r===1 ? 32 : "auto",
+          left: c===0 ? 32 : "auto", right: c===1 ? 32 : "auto",
+          width:40,height:40,
+          borderTop: r===0 ? "1px solid var(--gold-dim)" : "none",
+          borderBottom: r===1 ? "1px solid var(--gold-dim)" : "none",
+          borderLeft: c===0 ? "1px solid var(--gold-dim)" : "none",
+          borderRight: c===1 ? "1px solid var(--gold-dim)" : "none",
+          opacity:0.6}}/>
+      ))}
+
+      {/* Main content */}
+      <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:680,padding:"0 24px"}}>
+
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:48}}>
+          <BBLogo size={56}/>
+          <div style={{fontSize:28,fontFamily:"var(--font-display)",fontStyle:"italic",
+            color:"var(--text)",marginTop:20,marginBottom:6,letterSpacing:"-0.01em"}}>
+            Running Institutional Analysis
+          </div>
+          <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
+            Six-layer top-down framework · Bridgewater · AQR · BlackRock · Goldman Sachs
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{marginBottom:40}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em"}}>
+              ANALYSIS PROGRESS
+            </span>
+            <div style={{display:"flex",gap:20,alignItems:"center"}}>
+              <span style={{fontSize:13,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:500}}>
+                {progress}%
+              </span>
+              <span style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
+                {elapsedStr} elapsed
+              </span>
+            </div>
+          </div>
+          <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",
+            border:"1px solid var(--border)"}}>
+            <div style={{height:"100%",borderRadius:2,transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)",
+              width:progress+"%",
+              background:"linear-gradient(90deg,var(--gold2),var(--gold))",
+              boxShadow:"0 0 12px var(--gold), 0 0 24px var(--gold-dim)",
+              position:"relative",overflow:"hidden"}}>
+              {/* Shimmer effect on bar */}
+              <div style={{position:"absolute",inset:0,
+                background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)",
+                animation:"shimmer 1.5s ease-in-out infinite"}}/>
+            </div>
+          </div>
+        </div>
+
+        {/* Layer list */}
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {ANALYSIS_LAYERS.map((layer, i) => {
+            const done    = i < activeIdx;
+            const active  = i === activeIdx;
+            const pending = i > activeIdx;
+            return (
+              <div key={layer.id}
+                style={{display:"flex",alignItems:"center",gap:16,padding:"12px 16px",
+                  borderRadius:7,transition:"all 0.4s ease",
+                  background: active ? "var(--bg2)" : done ? "transparent" : "transparent",
+                  border: active ? "1px solid var(--gold-dim)" : "1px solid transparent",
+                  animation: active ? "layerIn 0.4s ease" : "none",
+                  boxShadow: active ? "0 0 24px var(--gold-dim)" : "none",
+                }}>
+                {/* Status dot */}
+                <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,display:"flex",
+                  alignItems:"center",justifyContent:"center",fontSize:14,
+                  background: done ? "var(--green2)20" : active ? "var(--gold-dim)" : "var(--bg3)",
+                  border: done ? "1px solid var(--green2)" : active ? "1px solid var(--gold)" : "1px solid var(--border)",
+                  color: done ? "var(--green)" : active ? "var(--gold)" : "var(--text3)",
+                  animation: active ? "goldGlow 2s ease-in-out infinite" : "none",
+                  transition:"all 0.4s ease",
+                }}>
+                  {done ? "✓" : layer.icon}
+                </div>
+
+                {/* Layer info */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-data)",
+                      letterSpacing:"0.12em",flexShrink:0}}>{layer.id}</span>
+                    <span style={{fontSize:14,fontFamily:"var(--font-body)",
+                      color: done ? "var(--text3)" : active ? "var(--text)" : "var(--text3)",
+                      fontWeight: active ? 400 : 300,
+                      transition:"color 0.3s",
+                    }}>{layer.label}</span>
+                    {active && (
+                      <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:4}}>
+                        {[0,1,2].map(d => (
+                          <div key={d} style={{width:4,height:4,borderRadius:"50%",
+                            background:"var(--gold)",
+                            animation:`dotBlink 1.2s ${d*0.25}s ease-in-out infinite`}}/>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{fontSize:12,color:active?"var(--text3)":"var(--border2)",
+                    fontFamily:"var(--font-data)",marginTop:3,letterSpacing:"0.02em",
+                    transition:"color 0.3s",
+                  }}>{layer.sub}</div>
+                </div>
+
+                {/* Right indicator */}
+                <div style={{flexShrink:0,fontSize:12,fontFamily:"var(--font-data)",
+                  color: done ? "var(--green)" : active ? "var(--gold)" : "var(--text3)",
+                  letterSpacing:"0.08em",
+                }}>
+                  {done ? "DONE" : active ? "RUNNING" : ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer note */}
+        <div style={{textAlign:"center",marginTop:36,fontSize:12,color:"var(--text3)",
+          fontFamily:"var(--font-data)",letterSpacing:"0.06em"}}>
+          Analysis typically takes 60–120 seconds · Web search active
+        </div>
       </div>
     </div>
   );
@@ -939,26 +1158,7 @@ export default function App() {
   const clearHistory=()=>{ if(window.confirm("Clear all saved reports?")){ saveReports([]); setCurrentReport(null); setSelectedDate(null); }};
 
   // ── LOADING SCREEN ──────────────────────────────────────────────────────────
-  if(loading) return (
-    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:28}}>
-      <BBLogo size={52}/>
-      <div style={{textAlign:"center"}}>
-        <div style={{fontSize:13,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text)",marginBottom:8}}>
-          Running Institutional Analysis
-        </div>
-        <div style={{fontSize:11,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{loadingStep}</div>
-      </div>
-      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"16px 28px",minWidth:320}}>
-        {["L1: Macro Regime","L2: Business Cycle","L3: Credit & Liquidity","L4: Factor Scoring","L5: Technical Overlays","L6: Tail Risk"].map((s,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:"var(--border2)"}}/>
-            <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{width:240,height:1,background:"linear-gradient(90deg,transparent,var(--gold),transparent)",animation:"pulse 2s ease infinite"}}/>
-    </div>
-  );
+  if(loading) return <AnalysisScreen loadingStep={loadingStep}/>;
 
   const r   = displayReport;
   const m   = r?.macroIndicators||{};
@@ -970,7 +1170,7 @@ export default function App() {
       <Card style={{marginBottom:16}}>
         <SectionLabel>Report Archive</SectionLabel>
         {reports.length===0
-          ? <div style={{color:"var(--text3)",fontSize:11,fontFamily:"var(--font-data)",padding:"24px 0",textAlign:"center"}}>
+          ? <div style={{color:"var(--text3)",fontSize:14,fontFamily:"var(--font-data)",padding:"24px 0",textAlign:"center"}}>
               No reports saved yet
             </div>
           : [...reports].reverse().map((rp,i)=>{
@@ -981,28 +1181,28 @@ export default function App() {
                   style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",borderRadius:6,
                     cursor:"pointer",marginBottom:4,background:active?"var(--bg3)":"transparent",
                     border:`1px solid ${active?"var(--gold-dim)":"transparent"}`,transition:"all 0.15s"}}>
-                  <div style={{fontSize:11,color:"var(--text)",fontFamily:"var(--font-display)",width:110,fontStyle:"italic"}}>
+                  <div style={{fontSize:14,color:"var(--text)",fontFamily:"var(--font-display)",width:110,fontStyle:"italic"}}>
                     {fmtDate(rp.reportDate)}
                   </div>
                   <RegimeBadge regime={rp.macroRegime?.quadrant||rp.marketRegime} size="sm"/>
-                  <div style={{fontSize:10,color:"var(--text3)",flex:1,fontFamily:"var(--font-body)"}}>
+                  <div style={{fontSize:16,color:"var(--text3)",flex:1,fontFamily:"var(--font-body)"}}>
                     {rp.businessCycle?.phase?.replace(/_/g," ")||rp.cyclePhase}
                   </div>
-                  {rp.tailRisk&&<span style={{fontSize:9,color:tailC,fontFamily:"var(--font-data)",
+                  {rp.tailRisk&&<span style={{fontSize:15,color:tailC,fontFamily:"var(--font-data)",
                     background:tailC+"15",border:`1px solid ${tailC}30`,borderRadius:3,padding:"1px 7px"}}>
                     TAIL {rp.tailRisk.compositeScore}</span>}
-                  {rp.recommendation?.primarySector&&<div style={{fontSize:10,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:500}}>
+                  {rp.recommendation?.primarySector&&<div style={{fontSize:16,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:500}}>
                     ↑ {rp.recommendation.primarySector.ticker}</div>}
-                  <div style={{fontSize:10,color:"var(--border2)"}}>›</div>
+                  <div style={{fontSize:16,color:"var(--border2)"}}>›</div>
                 </div>
               );
             })
         }
       </Card>
       {reports.length>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{reports.length} report{reports.length!==1?"s":""} in archive</div>
+        <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{reports.length} report{reports.length!==1?"s":""} in archive</div>
         <button onClick={clearHistory} style={{background:"none",border:"1px solid var(--red2)",color:"var(--red)",
-          borderRadius:4,padding:"5px 14px",fontSize:9,fontFamily:"var(--font-data)",cursor:"pointer",letterSpacing:"0.08em"}}>
+          borderRadius:4,padding:"5px 14px",fontSize:15,fontFamily:"var(--font-data)",cursor:"pointer",letterSpacing:"0.08em"}}>
           CLEAR ARCHIVE
         </button>
       </div>}
@@ -1015,18 +1215,18 @@ export default function App() {
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:460,gap:20}}>
         <BBLogo size={64}/>
         <div style={{textAlign:"center"}}>
-          <div style={{fontSize:24,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text)",marginBottom:8}}>
+          <div style={{fontSize:28,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text)",marginBottom:8}}>
             BlackBridge Equity Research
           </div>
-          <div style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-body)",marginBottom:4}}>
+          <div style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-body)",marginBottom:4}}>
             6-Layer Institutional Market Analysis
           </div>
-          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
+          <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
             Bridgewater · AQR · BlackRock · Goldman Sachs · Fidelity
           </div>
         </div>
         <div style={{width:160,height:1,background:"linear-gradient(90deg,transparent,var(--gold),transparent)"}}/>
-        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
+        <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
           Click ▶ RUN ANALYSIS to begin
         </div>
       </div>
@@ -1037,20 +1237,20 @@ export default function App() {
         {/* ── Header row */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
           <div style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{fontFamily:"var(--font-display)",fontStyle:"italic",fontSize:22,color:"var(--text)"}}>
+            <div style={{fontFamily:"var(--font-display)",fontStyle:"italic",fontSize:26,color:"var(--text)"}}>
               {fmtDate(r.reportDate)}
             </div>
             <RegimeBadge regime={r.macroRegime?.quadrant||r.marketRegime}/>
-            <span style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
+            <span style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
               {r.businessCycle?.phase?.replace(/_/g," ")||r.cyclePhase}
             </span>
-            {r.tailRisk && <span style={{fontSize:9,color:TAIL_COLORS[r.tailRisk.regime]||"var(--text3)",
+            {r.tailRisk && <span style={{fontSize:15,color:TAIL_COLORS[r.tailRisk.regime]||"var(--text3)",
               fontFamily:"var(--font-data)",background:TAIL_COLORS[r.tailRisk.regime]+"18",
               border:`1px solid ${TAIL_COLORS[r.tailRisk.regime]}30`,borderRadius:3,padding:"1px 8px"}}>
               TAIL {r.tailRisk.compositeScore}
             </span>}
           </div>
-          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{r.reportTime}</div>
+          <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{r.reportTime}</div>
         </div>
 
         {/* ── Macro strip */}
@@ -1108,17 +1308,17 @@ export default function App() {
         {rec.strategistNote && (
           <div style={{background:"var(--bg2)",border:"1px solid var(--gold-dim)",
             borderLeft:"3px solid var(--gold)",borderRadius:8,padding:"14px 20px",marginBottom:16}}>
-            <div style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:8}}>
+            <div style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:8}}>
               CHIEF STRATEGIST NOTE
             </div>
             <div style={{fontSize:14,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text2)",lineHeight:1.7}}>
               "{rec.strategistNote}"
             </div>
             <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap",alignItems:"center"}}>
-              {rec.overallRiskLevel && <span style={{fontSize:9,
+              {rec.overallRiskLevel && <span style={{fontSize:15,
                 color:{HIGH:"var(--red)",MEDIUM:"var(--amber)",LOW:"var(--green)"}[rec.overallRiskLevel]||"var(--platinum)",
                 fontFamily:"var(--font-data)"}}>RISK LEVEL: {rec.overallRiskLevel}</span>}
-              {rec.defensivePivot && <span style={{fontSize:9,color:"var(--red)",fontFamily:"var(--font-data)",
+              {rec.defensivePivot && <span style={{fontSize:15,color:"var(--red)",fontFamily:"var(--font-data)",
                 background:"var(--bg3)",border:"1px solid var(--red2)",borderRadius:3,padding:"1px 7px"}}>⚠ DEFENSIVE PIVOT ACTIVE</span>}
             </div>
           </div>
@@ -1136,11 +1336,11 @@ export default function App() {
             ))}
             {rec.avoidSectors?.length>0 && (
               <div style={{marginTop:10,borderTop:"1px solid var(--border)",paddingTop:8}}>
-                <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:5}}>AVOID</div>
+                <div style={{fontSize:14,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:5}}>AVOID</div>
                 {rec.avoidSectors.map((av,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
-                    <span style={{fontSize:10,color:"var(--red)",fontFamily:"var(--font-data)",fontWeight:500}}>{av.ticker||av}</span>
-                    {av.reason && <span style={{fontSize:9,color:"var(--text3)",flex:1,marginLeft:8,lineHeight:1.3}}>{av.reason}</span>}
+                    <span style={{fontSize:16,color:"var(--red)",fontFamily:"var(--font-data)",fontWeight:500}}>{av.ticker||av}</span>
+                    {av.reason && <span style={{fontSize:15,color:"var(--text3)",flex:1,marginLeft:8,lineHeight:1.3}}>{av.reason}</span>}
                   </div>
                 ))}
               </div>
@@ -1200,10 +1400,10 @@ export default function App() {
           <div>
             <div style={{fontSize:14,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",letterSpacing:"0.02em"}}>
               BlackBridge
-              <span style={{fontSize:11,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:400,
+              <span style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:400,
                 letterSpacing:"0.12em",marginLeft:8,verticalAlign:"middle"}}>EQUITY RESEARCH</span>
             </div>
-            <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",
+            <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",
               textTransform:"uppercase",marginTop:1}}>
               Bridgewater · AQR · BlackRock · Goldman · 6-Layer Institutional Analysis
             </div>
@@ -1215,7 +1415,7 @@ export default function App() {
           <div style={{display:"flex",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:5,overflow:"hidden"}}>
             {[["dashboard","Dashboard"],["archive","Archive"]].map(([id,label])=>(
               <button key={id} onClick={()=>{setTab(id);if(id==="archive")setSelectedDate(null);}}
-                style={{padding:"6px 16px",fontSize:10,fontFamily:"var(--font-data)",fontWeight:500,
+                style={{padding:"6px 16px",fontSize:16,fontFamily:"var(--font-data)",fontWeight:500,
                   letterSpacing:"0.08em",textTransform:"uppercase",border:"none",cursor:"pointer",
                   background:tab===id?"var(--gold)":"transparent",
                   color:tab===id?"var(--bg)":"var(--text3)",transition:"all 0.15s"}}>
@@ -1224,13 +1424,13 @@ export default function App() {
             ))}
           </div>
           <a href="/api/logout" style={{background:"none",border:"1px solid var(--border)",borderRadius:4,
-            color:"var(--text3)",padding:"5px 12px",fontSize:9,fontFamily:"var(--font-data)",
+            color:"var(--text3)",padding:"5px 12px",fontSize:15,fontFamily:"var(--font-data)",
             cursor:"pointer",textDecoration:"none",letterSpacing:"0.08em",transition:"border-color 0.15s"}}>
             LOG OUT
           </a>
           <button onClick={runAnalysis}
             style={{padding:"8px 20px",background:"var(--gold)",border:"none",borderRadius:5,
-              color:"var(--bg)",fontSize:10,fontFamily:"var(--font-data)",fontWeight:700,
+              color:"var(--bg)",fontSize:16,fontFamily:"var(--font-data)",fontWeight:700,
               letterSpacing:"0.1em",cursor:"pointer",transition:"background 0.15s"}}>
             ▶ RUN ANALYSIS
           </button>
@@ -1242,19 +1442,19 @@ export default function App() {
         <div style={{background:"var(--bg)",borderBottom:"1px solid var(--border)",
           padding:"5px 28px",display:"flex",alignItems:"center",gap:16}}>
           {error
-            ? <span style={{fontSize:10,color:"var(--red)",fontFamily:"var(--font-data)"}}>⚠ {error}</span>
+            ? <span style={{fontSize:16,color:"var(--red)",fontFamily:"var(--font-data)"}}>⚠ {error}</span>
             : <>
                 <span style={{width:5,height:5,borderRadius:"50%",background:"var(--green)",
                   display:"inline-block",boxShadow:"0 0 5px var(--green)"}}/>
-                <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.06em"}}>
+                <span style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.06em"}}>
                   LAST ANALYSIS: {currentReport?`${fmtDate(currentReport.reportDate)} ${currentReport.reportTime||""}`:"—"}
                   {reports.length>1?` · ${reports.length} reports in archive`:""}
                 </span>
                 {selectedDate && (
-                  <span style={{fontSize:9,color:"var(--amber)",fontFamily:"var(--font-data)"}}>
+                  <span style={{fontSize:15,color:"var(--amber)",fontFamily:"var(--font-data)"}}>
                     VIEWING: {fmtDate(selectedDate)} &nbsp;
                     <button onClick={()=>setSelectedDate(null)} style={{background:"none",border:"none",
-                      color:"var(--amber)",cursor:"pointer",fontSize:9,fontFamily:"var(--font-data)"}}>
+                      color:"var(--amber)",cursor:"pointer",fontSize:15,fontFamily:"var(--font-data)"}}>
                       × LATEST
                     </button>
                   </span>
