@@ -191,6 +191,20 @@ function robustParseJSON(raw) {
 function parseReport(text) {
   return robustParseJSON(text);
 }
+
+// Safe numeric coercion — model sometimes returns numbers as strings ("1.2" instead of 1.2).
+// Returns a JS number, or null if the value is absent/unparseable.
+function num(v) {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-+]/g, ""));
+  return isFinite(n) ? n : null;
+}
+
+// Safe toFixed — never crashes on string inputs
+function fmt(v, dp=2) {
+  const n = num(v);
+  return n != null ? n.toFixed(dp) : "—";
+}
 function fmtDate(d, short=false) {
   if (!d) return "—";
   const opts = short
@@ -199,25 +213,29 @@ function fmtDate(d, short=false) {
   return new Date(d+"T12:00:00Z").toLocaleDateString("en-US", opts);
 }
 function scoreColor(s) {
-  if (s==null) return "var(--text3)";
-  if (s>=1.0)  return "var(--green)";
-  if (s>=0.5)  return "#4DB887";
-  if (s>=-0.5) return "var(--platinum)";
-  if (s>=-1.0) return "var(--amber)";
+  const n = num(s);
+  if (n == null) return "var(--text3)";
+  if (n>=1.0)   return "var(--green)";
+  if (n>=0.5)   return "#4DB887";
+  if (n>=-0.5)  return "var(--platinum)";
+  if (n>=-1.0)  return "var(--amber)";
   return "var(--red)";
 }
 function scoreBar(s) {
-  if (s==null) return 50;
-  return Math.max(2, Math.min(98, ((s+2)/4)*100));
+  const n = num(s);
+  if (n == null) return 50;
+  return Math.max(2, Math.min(98, ((n+2)/4)*100));
 }
 function signalStyle(sig) {
-  return SIGNAL_STYLE[sig] || SIGNAL_STYLE.NEUTRAL;
+  return SIGNAL_STYLE[(sig||"").toUpperCase()] || SIGNAL_STYLE.NEUTRAL;
 }
 function signalShort(sig) {
-  if(!sig) return "N";
-  return sig.replace("STRONG_OVERWEIGHT","S.OW").replace("OVERWEIGHT","OW")
-            .replace("STRONG_UNDERWEIGHT","S.UW").replace("UNDERWEIGHT","UW")
-            .replace("NEUTRAL","N");
+  const s = (sig||"").toUpperCase();
+  if (s.includes("STRONG_OVER")) return "S.OW";
+  if (s.includes("OVER"))        return "OW";
+  if (s.includes("STRONG_UNDER"))return "S.UW";
+  if (s.includes("UNDER"))       return "UW";
+  return "N";
 }
 
 // ─── BB LOGO ─────────────────────────────────────────────────────────────────
@@ -301,14 +319,14 @@ function SectionLabel({ children }) {
 // ─── SCORE METER ─────────────────────────────────────────────────────────────
 function ScoreMeter({ score, size=40 }) {
   const c = scoreColor(score);
-  const label = score==null ? "—" : score>=1 ? "OW+" : score>=0.5 ? "OW" : score>-0.5 ? "N" : score>-1 ? "UW" : "UW−";
+  const sn = num(score); const label = sn==null ? "—" : sn>=1 ? "OW+" : sn>=0.5 ? "OW" : sn>-0.5 ? "N" : sn>-1 ? "UW" : "UW−";
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
       <div style={{ width:size, height:size, borderRadius:"50%", border:`1.5px solid ${c}`,
-        display:"flex", alignItems:"center", justifyContent:"center", background:c+"12" }}>
+        display:"flex", alignItems:"center", justifyContent:"center", background:c+"18" }}>
         <span style={{ fontSize:size*0.21, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{label}</span>
       </div>
-      {score!=null && <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)" }}>{score.toFixed(2)}</span>}
+      {num(score)!=null && <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)" }}>{fmt(score,2)}</span>}
     </div>
   );
 }
@@ -322,7 +340,7 @@ function LayerBar({ label, score }) {
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
         <span style={{ fontSize:15, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{label}</span>
         <span style={{ fontSize:15, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>
-          {score!=null ? score.toFixed(2) : "—"}
+          {fmt(score,2)}
         </span>
       </div>
       <div style={{ height:2, background:"var(--bg4)", borderRadius:1, overflow:"hidden" }}>
@@ -371,7 +389,7 @@ function PerformanceChart({ reports }) {
   // Build data points
   const pts = last12.map((r, i) => ({
     spx: parseFloat((r.macroIndicators?.spxChange||"0").replace(/[^0-9.\-+]/g,"")),
-    score: r.recommendation?.primarySector?.compositeScore ?? 0,
+    score: num(r.recommendation?.primarySector?.compositeScore) ?? 0,
     regime: r.macroRegime?.quadrant || r.marketRegime,
     sector: r.recommendation?.primarySector?.ticker || "—",
   }));
@@ -491,7 +509,7 @@ function SectorHeatmap({ reports }) {
                 <div key={ri} style={{ flex:1, height:22, background:c, opacity, borderRadius:2,
                   margin:"0 1px", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   {score!=null && <span style={{ fontSize:15, color:"var(--text)", fontFamily:"var(--font-data)",
-                    opacity:1 }}>{score.toFixed(1)}</span>}
+                    opacity:1 }}>{fmt(score,1)}</span>}
                 </div>
               );
             })}
@@ -514,7 +532,7 @@ function SectorHeatmap({ reports }) {
 // ─── MACRO QUADRANT ───────────────────────────────────────────────────────────
 function MacroQuadrantWidget({ mr }) {
   if (!mr) return null;
-  const gz = mr.growthZScore||0, iz = mr.inflationZScore||0;
+  const gz = num(mr.growthZScore) ?? 0, iz = num(mr.inflationZScore) ?? 0;
   const dotX = ((iz+2)/4)*100;
   const dotY = 100 - ((gz+2)/4)*100;
   const qc = REGIME_COLORS[mr.quadrant]||"var(--platinum)";
@@ -539,10 +557,10 @@ function MacroQuadrantWidget({ mr }) {
       </div>
       <div style={{flex:1}}>
         <RegimeBadge regime={mr.quadrant}/>
-        {mr.regimeConfidence != null && (
+        {num(mr.regimeConfidence) != null && (
           <div style={{fontSize:15,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:5}}>
-            Confidence: <span style={{color:mr.regimeConfidence>0.6?"var(--green)":"var(--amber)"}}>
-              {Math.round(mr.regimeConfidence*100)}%
+            Confidence: <span style={{color:(num(mr.regimeConfidence)??0)>0.6?"var(--green)":"var(--amber)"}}>
+              {Math.round((num(mr.regimeConfidence)??0)*100)}%
             </span>
           </div>
         )}
@@ -569,7 +587,7 @@ function MacroQuadrantWidget({ mr }) {
 // ─── INVESTMENT CLOCK ─────────────────────────────────────────────────────────
 function InvestmentClockWidget({ bc }) {
   if (!bc) return null;
-  const pos = bc.clockPosition||9;
+  const pos = num(bc.clockPosition) ?? 9;
   const rad = (pos/12)*2*Math.PI - Math.PI/2;
   const hx = 50 + 34*Math.cos(rad), hy = 50 + 34*Math.sin(rad);
   return (
@@ -604,7 +622,7 @@ function InvestmentClockWidget({ bc }) {
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
           {bc.ismPMI && (
-            <span style={{fontSize:15,color:parseFloat(bc.ismPMI)>50?"var(--green)":"var(--red)",
+            <span style={{fontSize:15,color:(num(bc.ismPMI)??50)>50?"var(--green)":"var(--red)",
               fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",
               borderRadius:3,padding:"1px 7px"}}>PMI {bc.ismPMI}</span>
           )}
@@ -625,7 +643,7 @@ function InvestmentClockWidget({ bc }) {
 // ─── CREDIT PANEL ─────────────────────────────────────────────────────────────
 function CreditPanel({ cl }) {
   if (!cl) return null;
-  const hyN = parseInt(cl.hyOAS)||0;
+  const hyN = num(cl.hyOAS) ?? 0;
   const hyC = hyN>700?"var(--red)":hyN>500?"var(--amber)":hyN>300?"var(--platinum)":"var(--green)";
   return (
     <div>
@@ -633,8 +651,8 @@ function CreditPanel({ cl }) {
         {[
           {l:"HY OAS",v:cl.hyOAS,c:hyC,s:cl.hyOASRegime},
           {l:"IG OAS",v:cl.igOAS,c:"var(--platinum)"},
-          {l:"NFCI",v:cl.nfci,c:parseFloat(cl.nfci)>0?"var(--amber)":"var(--green)",s:cl.nfciRegime},
-          {l:"MOVE",v:cl.moveIndex,c:parseInt(cl.moveIndex)>150?"var(--red)":"var(--platinum)"},
+          {l:"NFCI",v:cl.nfci,c:(num(cl.nfci)??0)>0?"var(--amber)":"var(--green)",s:cl.nfciRegime},
+          {l:"MOVE",v:cl.moveIndex,c:(num(cl.moveIndex)??0)>150?"var(--red)":"var(--platinum)"},
         ].map(({l,v,c,s})=>(
           <div key={l} style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:5,padding:"8px 10px"}}>
             <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:3,letterSpacing:"0.1em"}}>{l}</div>
@@ -666,7 +684,7 @@ function CreditPanel({ cl }) {
 // ─── TAIL RISK PANEL ──────────────────────────────────────────────────────────
 function TailRiskWidget({ tailRisk }) {
   if (!tailRisk) return null;
-  const sc = tailRisk.compositeScore||0;
+  const sc = num(tailRisk.compositeScore) ?? 0;
   const c  = TAIL_COLORS[tailRisk.regime]||"var(--platinum)";
   const ss = tailRisk.subScores||{};
   const bsc= tailRisk.blackSwanChecklist||{};
@@ -688,13 +706,13 @@ function TailRiskWidget({ tailRisk }) {
         <div>
           <div style={{fontSize:15,fontWeight:600,color:c,fontFamily:"var(--font-display)"}}>{tailRisk.regime}</div>
           <div style={{fontSize:15,color:"var(--text3)",marginTop:2}}>
-            Dampener: <span style={{color:c,fontFamily:"var(--font-data)"}}>{tailRisk.dampener?.toFixed(2)||"1.00"}×</span>
+            Dampener: <span style={{color:c,fontFamily:"var(--font-data)"}}>{fmt(tailRisk.dampener,2)}×</span>
           </div>
         </div>
       </div>
       <div style={{marginBottom:12}}>
         {subKeys.map(([k,label])=>{
-          const v=ss[k]||0;
+          const v = num(ss[k]) ?? 0;
           const bc=v>=70?"var(--red)":v>=50?"var(--amber)":"var(--border2)";
           return (
             <div key={k} style={{marginBottom:5}}>
@@ -747,7 +765,7 @@ function SectorRow({ s, onSelect, selected }) {
         <div style={{width:scoreBar(s.compositeScore)+"%",height:"100%",background:sc,borderRadius:1}}/>
       </div>
       <div style={{width:30,textAlign:"right",fontSize:15,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>
-        {s.compositeScore!=null?s.compositeScore.toFixed(1):"—"}
+        {fmt(s.compositeScore,1)}
       </div>
       <div style={{fontSize:15,fontWeight:500,color:ss.text,background:ss.bg,
         border:`1px solid ${ss.border}`,borderRadius:3,padding:"1px 5px",
@@ -778,9 +796,9 @@ function SectorDetailPanel({ s }) {
         <ScoreMeter score={s.compositeScore} size={42}/>
       </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-        {s.confidence!=null && <span style={{fontSize:14,color:s.confidence>0.65?"var(--green)":"var(--amber)",
+        {num(s.confidence)!=null && <span style={{fontSize:14,color:(num(s.confidence)??0)>0.65?"var(--green)":"var(--amber)",
           fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:3,padding:"1px 6px"}}>
-          {Math.round(s.confidence*100)}% CONF</span>}
+          {Math.round((num(s.confidence)??0)*100)}% CONF</span>}
         {s.primaryDriver && <span style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",
           background:"var(--bg3)",border:"1px solid var(--gold-dim)",borderRadius:3,padding:"1px 6px"}}>{s.primaryDriver}</span>}
       </div>
@@ -935,7 +953,7 @@ function MacroSparkline({ reports, field, label, color="var(--green)" }) {
       </svg>
       <div>
         <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{label}</div>
-        <div style={{fontSize:16,color:tC,fontFamily:"var(--font-data)"}}>{trend} {last.toFixed(2)}</div>
+        <div style={{fontSize:16,color:tC,fontFamily:"var(--font-data)"}}>{trend} {fmt(last,2)}</div>
       </div>
     </div>
   );
