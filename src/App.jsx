@@ -107,17 +107,52 @@ LAYER 6 — TAIL RISK: Score 0-100 each: volatilityStress, creditStress, funding
 SCORING: StrategicView=0.5×L1+0.5×L2 | TacticalView=0.25×L3+0.45×L4+0.3×L5 | Base=0.4×Strategic+0.6×Tactical | Final=Base×Dampener
 Signals: >1.0=STRONG_OVERWEIGHT, 0.5-1.0=OVERWEIGHT, -0.5-0.5=NEUTRAL, -1.0--0.5=UNDERWEIGHT, <-1.0=STRONG_UNDERWEIGHT
 
-OUTPUT: Single valid JSON only. No markdown, no extra text.
+OUTPUT: Single valid JSON only. No markdown, no extra text. All string values must be on one line — no literal newlines, tabs, or unescaped quotes inside strings. Use spaces instead.
 {"reportDate":"","reportTime":"","schemaVersion":"3.0","macroRegime":{"quadrant":"","growthMomentum":"","inflationMomentum":"","growthZScore":0,"inflationZScore":0,"regimeConfidence":0,"dalioDebtCyclePhase":"","regimeNarrative":""},"marketRegime":"","cyclePhase":"","businessCycle":{"phase":"","yieldCurveSignal":"","ismPMI":"","ismNewOrdersInventoriesDiff":"","clockPosition":0,"cycleNarrative":""},"creditLiquidity":{"hyOAS":"","hyOASRegime":"","igOAS":"","nfci":"","nfciRegime":"","vixLevel":"","vixTermStructure":"","moveIndex":"","creditSignal":"","liquidityNarrative":""},"macroIndicators":{"fedFundsRate":"","cpi":"","corePCE":"","unemployment":"","gdpGrowth":"","yieldCurve10Y2Y":"","tenYearYield":"","twoYearYield":"","dxy":"","dxyTrend":"","wtiCrude":"","goldPrice":"","copperGoldRatio":"","vix":"","moveIndex":"","spx":"","spxChange":"","spxVs200dma":"","breakeven10Y":"","realRate10Y":""},"economicEvents":[{"event":"","date":"","impact":"","actual":"","expected":"","prior":"","surprise":"","marketImplication":"","affectedSectors":[]}],"topNews":[{"headline":"","source":"","sentiment":"","sectorImpact":[],"macroRelevance":"","impact":""}],"sectorAnalysis":[{"ticker":"","name":"","compositeScore":0,"signal":"","confidence":0,"primaryDriver":"","layerScores":{"l1MacroRegime":0,"l2CycleTilt":0,"l3CreditLiq":0,"l4Fundamentals":0,"l5Technicals":0},"factorScores":{"momentum":"","momentum12m1":"","value":"","fwdPERelative":"","quality":"","earningsRevisionBreadth":"","erbTrend":"","lowVol":"","carry":"","technicalTrend":"","rsi14":"","macdSignal":"","relStrengthVsSPX":""},"cycleAlignment":"","catalyst":"","risk":"","conflictingSignals":[]}],"tailRisk":{"compositeScore":0,"regime":"","dampener":0,"subScores":{"volatilityStress":0,"creditStress":0,"fundingLiquidity":0,"systemicRisk":0,"macroVulnerability":0,"geopoliticalTail":0},"vixTermStructure":"","activeAlerts":[],"blackSwanChecklist":{"dalioDepressionGauge":"","bisEarlyWarning":"","reflexivityAlert":false,"breadthDivergence":false,"creditGapWarning":false,"yieldCurveInversion":false},"tailNarrative":""},"recommendation":{"primarySector":{"ticker":"","name":"","conviction":"","compositeScore":0,"thesis":"","timeHorizon":"","entryRationale":"","catalysts":[],"keyRisks":[]},"secondarySector":{"ticker":"","name":"","conviction":"","compositeScore":0,"thesis":"","timeHorizon":"","entryRationale":"","catalysts":[],"keyRisks":[]},"avoidSectors":[{"ticker":"","reason":""}],"defensivePivot":false,"overallRiskLevel":"","tailRiskAdjustment":"","strategistNote":""}}
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+// Sanitise JSON from LLMs: escape bare control characters inside string values
+// using a proper state machine (regex can't reliably track string boundaries).
+function sanitizeJSON(str) {
+  let out = "", inStr = false, i = 0;
+  while (i < str.length) {
+    const ch = str[i], code = str.charCodeAt(i);
+    if (inStr) {
+      if (ch === "\\") { out += ch + (str[i+1]||""); i += 2; continue; }  // skip escape seq
+      if (ch === '"')  { inStr = false; out += ch; i++; continue; }
+      // Bare control character inside string — escape it
+      if (code < 0x20) {
+        if      (ch === "\n") out += "\\n";
+        else if (ch === "\r") out += "\\r";
+        else if (ch === "\t") out += "\\t";
+        else out += "\\u" + code.toString(16).padStart(4,"0");
+        i++; continue;
+      }
+    } else {
+      if (ch === '"') inStr = true;
+    }
+    out += ch; i++;
+  }
+  return out;
+}
+
 function parseReport(text) {
-  const clean = text.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
-  try { return JSON.parse(clean); } catch(_) {}
-  const m = clean.match(/\{[\s\S]*\}/);
-  if (m) return JSON.parse(m[0]);
-  throw new Error("Could not extract valid JSON from response");
+  // Strip markdown fences
+  let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+
+  // Extract outermost JSON object
+  const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+  if (s !== -1 && e !== -1) clean = clean.slice(s, e + 1);
+
+  // Try direct parse
+  try { return JSON.parse(clean); } catch (_) {}
+
+  // Sanitise control characters inside strings and retry
+  try { return JSON.parse(sanitizeJSON(clean)); } catch (_) {}
+
+  throw new Error("Could not parse report JSON. The model may have returned malformed output.");
 }
 function fmtDate(d, short=false) {
   if (!d) return "—";
@@ -1203,9 +1238,15 @@ export default function App() {
         }
       }
       if(!finalData) throw new Error("No response received from analysis. Please try again.");
-      const texts=(finalData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      if(!texts) throw new Error("No text content in response. Please try again.");
-      const report=parseReport(texts);
+      const texts = (finalData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      if (!texts) throw new Error("No text content in response. Please try again.");
+      let report;
+      try {
+        report = parseReport(texts);
+      } catch (parseErr) {
+        // Show the position of the failure to help diagnose
+        throw new Error(`Report JSON invalid: ${parseErr.message}. The model may have included unescaped characters in a text field.`);
+      }
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
       saveReports(updated);
       setCurrentReport(report);
