@@ -1,17 +1,17 @@
 /**
- * /api/analyze — Vercel Edge Function with SSE streaming proxy
+ * /api/analyze — Vercel Edge Function
  *
- * Uses Anthropic's streaming API (text/event-stream) so:
- * - First bytes arrive within ~1s, well before any timeout window
- * - Edge Function streams indefinitely while Anthropic sends events
- * - No timeout issues regardless of how long web_search takes
+ * Keeps SSE connection alive with periodic pings (prevents 30s Edge timeout),
+ * calls Anthropic with stream:false (avoids complex SSE text_delta parsing
+ * that fails when web_search tool_use blocks precede the final text),
+ * then sends the complete Anthropic JSON response as a single SSE data event.
  *
- * The frontend reads the SSE stream and extracts the final message.
+ * Frontend just waits for the final data event and parses it normally.
  */
 
 export const config = { runtime: "edge" };
 
-// ── Auth helpers ───────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 async function hmacSign(secret, message) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -23,13 +23,11 @@ async function hmacSign(secret, message) {
   return btoa(String.fromCharCode(...new Uint8Array(sig)))
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
-
-function parseSessionCookie(cookieHeader) {
-  if (!cookieHeader) return null;
-  const m = cookieHeader.match(/(?:^|;\s*)bb_session=([^;]+)/);
+function parseSessionCookie(h) {
+  if (!h) return null;
+  const m = h.match(/(?:^|;\s*)bb_session=([^;]+)/);
   return m ? m[1] : null;
 }
-
 async function isAuthenticated(req) {
   const secret = process.env.SESSION_SECRET;
   if (!secret) return false;
@@ -42,7 +40,7 @@ async function isAuthenticated(req) {
   return diff === 0;
 }
 
-// ── Handler ────────────────────────────────────────────────────────────────────
+// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req) {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -63,42 +61,65 @@ export default async function handler(req) {
     });
   }
 
-  try {
-    const body = await req.json();
-
-    // Request streaming from Anthropic (SSE)
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "prompt-caching-2024-07-31", // keeps connection warm
-      },
-      body: JSON.stringify({ ...body, stream: true }),
-    });
-
-    if (!upstream.ok) {
-      const err = await upstream.json().catch(() => ({ error: { message: "Upstream error" } }));
-      return new Response(JSON.stringify(err), {
-        status: upstream.status,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // Stream the SSE response straight through to the browser
-    return new Response(upstream.body, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-store",
-        "X-Accel-Buffering": "no",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: "Proxy error: " + err.message }), {
-      status: 500, headers: { "Content-Type": "application/json" }
+  // Parse request body before starting the transform stream
+  let body;
+  try { body = await req.json(); }
+  catch (e) {
+    return new Response(JSON.stringify({ error: "Invalid request body" }), {
+      status: 400, headers: { "Content-Type": "application/json" }
     });
   }
+
+  // Open a TransformStream — lets us write SSE events from an async background task
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const enc = new TextEncoder();
+
+  const write = (s) => writer.write(enc.encode(s)).catch(() => {});
+
+  // Background task: ping to keep the Edge connection alive, then call Anthropic
+  (async () => {
+    let pingTimer;
+    try {
+      // Send a ping every 8 seconds so the Edge Function response never stalls
+      pingTimer = setInterval(() => write(": ping\n\n"), 8000);
+
+      const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          // No stream:true — avoids the web_search tool_use / text_delta ordering problem
+        },
+        body: JSON.stringify({ ...body, stream: false }),
+      });
+
+      clearInterval(pingTimer);
+
+      const data = await upstream.json();
+
+      if (!upstream.ok) {
+        await write(`data: ${JSON.stringify({ error: data.error || { message: `API error ${upstream.status}` } })}\n\n`);
+      } else {
+        // Send the complete Anthropic response as one SSE data event
+        await write(`data: ${JSON.stringify(data)}\n\n`);
+      }
+    } catch (err) {
+      clearInterval(pingTimer);
+      await write(`data: ${JSON.stringify({ error: { message: "Proxy error: " + err.message } })}\n\n`);
+    } finally {
+      await writer.close().catch(() => {});
+    }
+  })();
+
+  // Return the streaming response immediately — the background task fills it
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-store",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

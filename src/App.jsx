@@ -905,24 +905,28 @@ export default function App() {
         const e=await res.json().catch(()=>({}));
         throw new Error(e.error?.message||e.error||`Server error ${res.status}`);
       }
-      clearInterval(timer); setLoadingStep("Receiving analysis stream…");
+      clearInterval(timer); setLoadingStep("Receiving analysis…");
+      // Read the SSE stream — proxy sends pings to keep alive, then one final data event
       const reader=res.body.getReader(); const dec=new TextDecoder();
-      let fullText="", buf="";
+      let buf="", finalData=null;
       while(true){
         const {done,value}=await reader.read(); if(done) break;
         buf+=dec.decode(value,{stream:true});
         const lines=buf.split("\n"); buf=lines.pop()||"";
         for(const line of lines){
-          if(!line.startsWith("data: ")) continue;
-          const data=line.slice(6).trim(); if(data==="[DONE]") break;
-          try {
-            const evt=JSON.parse(data);
-            if(evt.type==="content_block_delta"&&evt.delta?.type==="text_delta") fullText+=evt.delta.text||"";
-          }catch(_){}
+          if(!line.startsWith("data: ")) continue; // skip pings (": ping")
+          const payload=line.slice(6).trim(); if(!payload) continue;
+          try{
+            const parsed=JSON.parse(payload);
+            if(parsed.error) throw new Error(parsed.error?.message||parsed.error||"API error");
+            if(parsed.content) finalData=parsed; // complete Anthropic response object
+          }catch(e){ if(e.message!=="Unexpected token") throw e; }
         }
       }
-      if(!fullText) throw new Error("No content received from analysis stream");
-      const report=parseReport(fullText);
+      if(!finalData) throw new Error("No response received from analysis. Please try again.");
+      const texts=(finalData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      if(!texts) throw new Error("No text content in response. Please try again.");
+      const report=parseReport(texts);
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
       saveReports(updated); setCurrentReport(report);
     } catch(err) {
