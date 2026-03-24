@@ -1161,9 +1161,10 @@ export default function App() {
           const sorted = merged.sort((a,b) => a.reportDate < b.reportDate ? -1 : 1);
           // Update localStorage cache
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted)); } catch(_) {}
+          // Set current to the latest report in the final merged+sorted array
+          if (sorted.length > 0) setCurrentReport(sorted[sorted.length - 1]);
           return sorted;
         });
-        setCurrentReport(data[data.length - 1]);
       })
       .catch(() => {}); // offline or Supabase down — localStorage cache is fine
   }, []);

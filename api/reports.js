@@ -71,11 +71,16 @@ export default async function handler(req) {
     });
   }
 
-  // GET — fetch all reports ordered newest first
+  // GET — fetch all reports in chronological order (oldest first, frontend sorts)
   if (req.method === "GET") {
     const res = await fetch(
       supabaseUrl("bb_reports?select=report_date,payload&order=report_date.asc"),
-      { headers: supabaseHeaders() }
+      { headers: {
+          "Content-Type": "application/json",
+          "apikey": process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY}`,
+        }
+      }
     );
     if (!res.ok) {
       const err = await res.text();

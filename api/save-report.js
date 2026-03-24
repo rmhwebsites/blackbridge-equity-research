@@ -88,7 +88,7 @@ export default async function handler(req) {
   }
 
   // Upsert: insert or replace on report_date conflict
-  const res = await fetch(supabaseUrl("bb_reports"), {
+  const res = await fetch(supabaseUrl("bb_reports?on_conflict=report_date"), {
     method: "POST",
     headers: supabaseHeaders(),
     body: JSON.stringify({
