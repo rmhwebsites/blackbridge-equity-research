@@ -1123,12 +1123,13 @@ export default function App() {
   const [selectedDate,setSelectedDate]=useState(null);
   const [selectedSector,setSelectedSector]=useState(null);
 
+  // ── Load reports: Supabase first, localStorage as fallback cache ─────────────
   useEffect(()=>{
+    // 1. Hydrate from localStorage immediately (instant, no flicker)
     try {
       const s = localStorage.getItem(STORAGE_KEY);
       if (s) {
         const arr = JSON.parse(s);
-        // Validate each entry has minimum required fields
         const valid = arr.filter(r =>
           r && typeof r === "object" &&
           typeof r.reportDate === "string" &&
@@ -1140,20 +1141,55 @@ export default function App() {
         }
       }
     } catch(_) {}
-  },[]);
+
+    // 2. Then fetch from Supabase (source of truth — syncs across devices)
+    fetch("/api/reports", { credentials: "same-origin" })
+      .then(r => {
+        if (r.status === 401) { window.location.href = "/login"; return null; }
+        return r.ok ? r.json() : null;
+      })
+      .then(data => {
+        if (!data || !Array.isArray(data) || data.length === 0) return;
+        // Merge: Supabase wins for any date that exists in both
+        setReports(prev => {
+          const merged = [...prev];
+          data.forEach(remote => {
+            const idx = merged.findIndex(l => l.reportDate === remote.reportDate);
+            if (idx >= 0) merged[idx] = remote;
+            else merged.push(remote);
+          });
+          const sorted = merged.sort((a,b) => a.reportDate < b.reportDate ? -1 : 1);
+          // Update localStorage cache
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted)); } catch(_) {}
+          return sorted;
+        });
+        setCurrentReport(data[data.length - 1]);
+      })
+      .catch(() => {}); // offline or Supabase down — localStorage cache is fine
+  }, []);
 
   const saveReports = (arr) => {
-    // Sort chronologically by reportDate before saving so archive is always ordered
     const sorted = [...arr].sort((a,b) => (a.reportDate||"") < (b.reportDate||"") ? -1 : 1);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
     } catch(e) {
-      // localStorage quota — try trimming old reports
       if (sorted.length > 10) {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted.slice(-10))); } catch(_) {}
       }
     }
     setReports(sorted);
+  };
+
+  // Persist a single report to Supabase (non-blocking — localStorage already has it)
+  const saveReportRemote = async (report) => {
+    try {
+      await fetch("/api/save-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ report }),
+      });
+    } catch(_) {}
   };
 
   const runAnalysis=async()=>{
@@ -1198,7 +1234,9 @@ export default function App() {
       if(!texts) throw new Error("No text content in response. Please try again.");
       const report=parseReport(texts);
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
-      saveReports(updated); setCurrentReport(report);
+      saveReports(updated);
+      setCurrentReport(report);
+      saveReportRemote(report); // async — persist to Supabase in background
     } catch(err) {
       clearInterval(timer);
       setError(err.message||"Analysis failed. Please try again.");
@@ -1206,7 +1244,17 @@ export default function App() {
   };
 
   const displayReport=selectedDate?reports.find(r=>r.reportDate===selectedDate):currentReport;
-  const clearHistory=()=>{ if(window.confirm("Clear all saved reports?")){ saveReports([]); setCurrentReport(null); setSelectedDate(null); }};
+
+  const clearHistory = async () => {
+    if (!window.confirm("Clear all saved reports? This deletes from Supabase too.")) return;
+    saveReports([]);
+    setCurrentReport(null);
+    setSelectedDate(null);
+    // Delete from Supabase
+    try {
+      await fetch("/api/reports", { method: "DELETE", credentials: "same-origin" });
+    } catch(_) {}
+  };
 
   // ── LOADING SCREEN ──────────────────────────────────────────────────────────
   if(loading) return <AnalysisScreen loadingStep={loadingStep}/>;

@@ -3,12 +3,14 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {
-    "api/login.js":  { "memory": 128, "maxDuration": 10 },
-    "api/logout.js": { "memory": 128, "maxDuration": 5  }
+    "api/login.js":       { "memory": 128, "maxDuration": 10 },
+    "api/logout.js":      { "memory": 128, "maxDuration": 5  },
+    "api/reports.js":     { "memory": 128, "maxDuration": 15 },
+    "api/save-report.js": { "memory": 128, "maxDuration": 10 }
   },
   "rewrites": [
-    { "source": "/login",    "destination": "/api/login"  },
-    { "source": "/api/(.*)", "destination": "/api/$1"     },
-    { "source": "/(.*)",     "destination": "/index.html" }
+    { "source": "/login",       "destination": "/api/login"       },
+    { "source": "/api/(.*)",    "destination": "/api/$1"          },
+    { "source": "/(.*)",        "destination": "/index.html"      }
   ]
 }
