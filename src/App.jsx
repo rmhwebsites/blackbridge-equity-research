@@ -45,6 +45,33 @@ const BRAND = `
   @keyframes goldGlow { 0%,100%{opacity:0.5} 50%{opacity:1} }
   @keyframes scanDown { 0%{top:-2px} 100%{top:100%} }
   @keyframes dotBlink { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1.2)} }
+
+  /* Responsive grid helpers */
+  .grid-3col  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+  .grid-2col  { display:grid; grid-template-columns:3fr 2fr; gap:16px; margin-bottom:16px; }
+  .grid-4col  { display:grid; grid-template-columns:1fr 1fr 200px 200px; gap:16px; margin-bottom:16px; }
+  .grid-tail  { display:grid; grid-template-columns:260px 1fr 1fr; gap:16px; margin-bottom:16px; }
+  .grid-2even { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+  @media (max-width: 1100px) {
+    .grid-4col { grid-template-columns:1fr 1fr; }
+    .grid-tail { grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width: 900px) {
+    .grid-3col  { grid-template-columns:1fr 1fr; }
+    .grid-2col  { grid-template-columns:1fr; }
+    .grid-4col  { grid-template-columns:1fr; }
+    .grid-tail  { grid-template-columns:1fr; }
+    .grid-2even { grid-template-columns:1fr; }
+  }
+  @media (max-width: 600px) {
+    .grid-3col  { grid-template-columns:1fr; }
+    .grid-2even { grid-template-columns:1fr; }
+    .bb-header-sub { display:none; }
+    .bb-header-rule { display:none; }
+    .bb-logout { display:none; }
+    .bb-status-bar { flex-wrap:wrap; gap:8px; }
+  }
 `;
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1098,12 +1125,36 @@ export default function App() {
 
   useEffect(()=>{
     try {
-      const s=localStorage.getItem(STORAGE_KEY);
-      if(s){ const a=JSON.parse(s); setReports(a); if(a.length) setCurrentReport(a[a.length-1]); }
-    } catch(_){}
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) {
+        const arr = JSON.parse(s);
+        // Validate each entry has minimum required fields
+        const valid = arr.filter(r =>
+          r && typeof r === "object" &&
+          typeof r.reportDate === "string" &&
+          r.reportDate.match(/^\d{4}-\d{2}-\d{2}$/)
+        );
+        if (valid.length) {
+          setReports(valid);
+          setCurrentReport(valid[valid.length - 1]);
+        }
+      }
+    } catch(_) {}
   },[]);
 
-  const saveReports=(arr)=>{ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));}catch(_){} setReports(arr); };
+  const saveReports = (arr) => {
+    // Sort chronologically by reportDate before saving so archive is always ordered
+    const sorted = [...arr].sort((a,b) => (a.reportDate||"") < (b.reportDate||"") ? -1 : 1);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+    } catch(e) {
+      // localStorage quota — try trimming old reports
+      if (sorted.length > 10) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted.slice(-10))); } catch(_) {}
+      }
+    }
+    setReports(sorted);
+  };
 
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
@@ -1139,7 +1190,7 @@ export default function App() {
             const parsed=JSON.parse(payload);
             if(parsed.error) throw new Error(parsed.error?.message||parsed.error||"API error");
             if(parsed.content) finalData=parsed; // complete Anthropic response object
-          }catch(e){ if(e.message!=="Unexpected token") throw e; }
+          }catch(e){ if(!(e instanceof SyntaxError)) throw e; }  // skip malformed SSE lines, re-throw real errors
         }
       }
       if(!finalData) throw new Error("No response received from analysis. Please try again.");
@@ -1199,7 +1250,7 @@ export default function App() {
             })
         }
       </Card>
-      {reports.length>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {reports.length>0&&<div className="grid-2even" style={{marginTop:12}}>
         <div style={{fontSize:16,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{reports.length} report{reports.length!==1?"s":""} in archive</div>
         <button onClick={clearHistory} style={{background:"none",border:"1px solid var(--red2)",color:"var(--red)",
           borderRadius:4,padding:"5px 14px",fontSize:15,fontFamily:"var(--font-data)",cursor:"pointer",letterSpacing:"0.08em"}}>
@@ -1276,7 +1327,7 @@ export default function App() {
 
         {/* ── Performance & Heatmap row */}
         {reports.length >= 2 && (
-          <div style={{display:"grid",gridTemplateColumns:"3fr 2fr",gap:16,marginBottom:16}}>
+          <div className="grid-2col">
             <Card>
               <SectionLabel>S&P 500 Daily Performance vs Primary Sector Score</SectionLabel>
               <PerformanceChart reports={reports}/>
@@ -1289,7 +1340,7 @@ export default function App() {
         )}
 
         {/* ── Three-layer overview */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:16}}>
+        <div className="grid-3col">
           <Card>
             <SectionLabel>L1 · Macro Regime</SectionLabel>
             <MacroQuadrantWidget mr={r.macroRegime}/>
@@ -1325,7 +1376,7 @@ export default function App() {
         )}
 
         {/* ── Rec cards + sector board + sector detail */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 200px 200px",gap:16,marginBottom:16}}>
+        <div className="grid-4col">
           <RecCard rec={rec.primarySector} primary={true}/>
           <RecCard rec={rec.secondarySector} primary={false}/>
           {/* Sector board */}
@@ -1354,7 +1405,7 @@ export default function App() {
         </div>
 
         {/* ── Tail risk + News + Events */}
-        <div style={{display:"grid",gridTemplateColumns:"260px 1fr 1fr",gap:16,marginBottom:16}}>
+        <div className="grid-tail">
           <Card>
             <SectionLabel>L6 · Tail Risk</SectionLabel>
             <TailRiskWidget tailRisk={r.tailRisk}/>
@@ -1392,7 +1443,7 @@ export default function App() {
       <style>{BRAND}</style>
 
       {/* HEADER */}
-      <div style={{borderBottom:"1px solid var(--border)",padding:"12px 28px",display:"flex",
+      <div style={{borderBottom:"1px solid var(--border)",padding:"12px clamp(12px,3vw,28px)",display:"flex",
         alignItems:"center",justifyContent:"space-between",background:"var(--bg2)",
         position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -1403,14 +1454,14 @@ export default function App() {
               <span style={{fontSize:14,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:400,
                 letterSpacing:"0.12em",marginLeft:8,verticalAlign:"middle"}}>EQUITY RESEARCH</span>
             </div>
-            <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",
+            <div className="bb-header-sub" style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",
               textTransform:"uppercase",marginTop:1}}>
               Bridgewater · AQR · BlackRock · Goldman · 6-Layer Institutional Analysis
             </div>
           </div>
         </div>
         {/* Gold rule */}
-        <div style={{flex:1,height:1,background:"linear-gradient(90deg,var(--border),var(--gold-dim),var(--border))",margin:"0 24px"}}/>
+        <div className="bb-header-rule" style={{flex:1,height:1,background:"linear-gradient(90deg,var(--border),var(--gold-dim),var(--border))",margin:"0 24px"}}/>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{display:"flex",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:5,overflow:"hidden"}}>
             {[["dashboard","Dashboard"],["archive","Archive"]].map(([id,label])=>(
@@ -1423,7 +1474,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <a href="/api/logout" style={{background:"none",border:"1px solid var(--border)",borderRadius:4,
+          <a className="bb-logout" href="/api/logout" style={{background:"none",border:"1px solid var(--border)",borderRadius:4,
             color:"var(--text3)",padding:"5px 12px",fontSize:15,fontFamily:"var(--font-data)",
             cursor:"pointer",textDecoration:"none",letterSpacing:"0.08em",transition:"border-color 0.15s"}}>
             LOG OUT
@@ -1439,8 +1490,8 @@ export default function App() {
 
       {/* STATUS BAR */}
       {(error||currentReport) && (
-        <div style={{background:"var(--bg)",borderBottom:"1px solid var(--border)",
-          padding:"5px 28px",display:"flex",alignItems:"center",gap:16}}>
+        <div className="bb-status-bar" style={{background:"var(--bg)",borderBottom:"1px solid var(--border)",
+          padding:"6px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
           {error
             ? <span style={{fontSize:16,color:"var(--red)",fontFamily:"var(--font-data)"}}>⚠ {error}</span>
             : <>
@@ -1465,7 +1516,7 @@ export default function App() {
       )}
 
       {/* MAIN */}
-      <div style={{padding:"22px 28px",maxWidth:1600,margin:"0 auto"}}>
+      <div style={{padding:"clamp(12px,3vw,22px) clamp(12px,3vw,28px)",maxWidth:1600,margin:"0 auto"}}>
         {tab==="dashboard" && renderDashboard()}
         {tab==="archive"   && renderArchive()}
       </div>
