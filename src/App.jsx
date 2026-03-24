@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const STORAGE_KEY   = "bb_market_reports_v3";
-const API_KEY_STORE = "bb_anthropic_key";
+const PASSWORD_STORE = "bb_dashboard_password";
 
 const REGIME_COLORS = {
   RISK_ON:"#22d3a8", RISK_OFF:"#f87171", TRANSITIONING:"#f59e0b", NEUTRAL:"#94a3b8",
@@ -769,9 +769,31 @@ function TrendChart({reports}) {
   );
 }
 
-// ─── API KEY GATE ─────────────────────────────────────────────────────────────
-function ApiKeyGate({onSave}) {
-  const [val,setVal]=useState("");
+// ─── PASSWORD GATE ────────────────────────────────────────────────────────────
+function PasswordGate({onSave}) {
+  const [val, setVal] = useState("");
+  const [err, setErr] = useState("");
+
+  const attempt = async () => {
+    if (!val.trim()) return;
+    // Quick pre-flight to verify password before saving
+    setErr("Verifying…");
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-dashboard-password": val.trim() },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+      });
+      if (res.status === 401) { setErr("Incorrect password. Try again."); return; }
+      if (res.status === 500) { setErr("Server error — check Vercel environment variables."); return; }
+      // 400 / 200 both mean auth passed (400 = bad model param is fine, key worked)
+      onSave(val.trim());
+    } catch (_) {
+      // Network error — still save and let the analysis step surface the error
+      onSave(val.trim());
+    }
+  };
+
   return (
     <div style={{minHeight:"100vh",background:"#020b14",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{width:440,background:"#060f1a",border:"1px solid #0f2037",borderRadius:10,padding:36}}>
@@ -782,19 +804,24 @@ function ApiKeyGate({onSave}) {
             <div style={{fontSize:10,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace"}}>6-LAYER INSTITUTIONAL MARKET ANALYSIS</div>
           </div>
         </div>
-        <p style={{fontSize:12,color:"#64748b",lineHeight:1.7,marginBottom:20}}>Enter your Anthropic API key to power the daily institutional-grade market analysis agent (Bridgewater · AQR · BlackRock · Goldman frameworks). Stored only in your browser.</p>
-        <div style={{fontSize:10,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>ANTHROPIC API KEY</div>
-        <input type="password" value={val} onChange={e=>setVal(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&val&&onSave(val.trim())}
-          placeholder="sk-ant-..."
-          style={{width:"100%",background:"#0a1628",border:"1px solid #1e3a5f",borderRadius:5,padding:"10px 14px",color:"#e2e8f0",fontSize:13,fontFamily:"monospace",outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
-        <button onClick={()=>val.trim()&&onSave(val.trim())}
-          style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",padding:"10px",fontSize:12,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer"}}>
+        <p style={{fontSize:12,color:"#64748b",lineHeight:1.7,marginBottom:20}}>
+          Enter your dashboard password to access the institutional market analysis platform.
+        </p>
+        <div style={{fontSize:10,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>DASHBOARD PASSWORD</div>
+        <input
+          type="password"
+          value={val}
+          onChange={e=>{setVal(e.target.value);setErr("");}}
+          onKeyDown={e=>e.key==="Enter"&&attempt()}
+          placeholder="Enter password…"
+          style={{width:"100%",background:"#0a1628",border:`1px solid ${err&&err!=="Verifying…"?"#f87171":"#1e3a5f"}`,borderRadius:5,padding:"10px 14px",color:"#e2e8f0",fontSize:13,fontFamily:"monospace",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+        />
+        {err && <div style={{fontSize:11,color:err==="Verifying…"?"#f59e0b":"#f87171",fontFamily:"monospace",marginBottom:10}}>{err}</div>}
+        <button
+          onClick={attempt}
+          style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",padding:"10px",fontSize:12,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer",marginTop:err?0:10}}>
           ENTER DASHBOARD →
         </button>
-        <div style={{marginTop:14,fontSize:10,color:"#1e3a5f",textAlign:"center"}}>
-          Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{color:"#1d4ed8"}}>console.anthropic.com</a>
-        </div>
       </div>
     </div>
   );
@@ -802,7 +829,7 @@ function ApiKeyGate({onSave}) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [apiKey,setApiKey]=useState(()=>localStorage.getItem(API_KEY_STORE)||"");
+  const [password,setPassword]=useState(()=>localStorage.getItem(PASSWORD_STORE)||"");
   const [reports,setReports]=useState([]);
   const [currentReport,setCurrentReport]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -820,9 +847,9 @@ export default function App() {
   },[]);
 
   const saveReports=(arr)=>{ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));}catch(_){} setReports(arr); };
-  const handleSaveKey=(k)=>{ localStorage.setItem(API_KEY_STORE,k); setApiKey(k); };
+  const handleSavePassword=(p)=>{ localStorage.setItem(PASSWORD_STORE,p); setPassword(p); };
 
-  if(!apiKey) return <ApiKeyGate onSave={handleSaveKey}/>;
+  if(!password) return <PasswordGate onSave={handleSavePassword}/>;
 
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
@@ -830,9 +857,12 @@ export default function App() {
     let si=0; setLoadingStep(STEPS[0]);
     const timer=setInterval(()=>{ si++; if(si<STEPS.length) setLoadingStep(STEPS[si]); },2500);
     try {
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
+        headers:{
+          "Content-Type":"application/json",
+          "x-dashboard-password": password,
+        },
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:6000,
@@ -842,6 +872,7 @@ export default function App() {
         })
       });
       clearInterval(timer); setLoadingStep("✅ Processing institutional report…");
+      if(res.status===401){ setError("Incorrect password. Please log out and re-enter."); return; }
       const data=await res.json();
       if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
       const texts=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
@@ -1036,7 +1067,7 @@ export default function App() {
               <button key={id} onClick={()=>{setTab(id);if(id==="archive")setSelectedDate(null);}} style={{padding:"6px 16px",fontSize:11,fontFamily:"monospace",fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",border:"none",cursor:"pointer",background:tab===id?"#1d4ed8":"transparent",color:tab===id?"#fff":"#334155",transition:"all 0.15s"}}>{label}</button>
             ))}
           </div>
-          <button onClick={()=>{setApiKey("");localStorage.removeItem(API_KEY_STORE);}} title="Change API Key" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:4,color:"#334155",padding:"5px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer"}}>⚙ KEY</button>
+          <button onClick={()=>{setPassword("");localStorage.removeItem(PASSWORD_STORE);}} title="Log out" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:4,color:"#334155",padding:"5px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer"}}>⚙ LOG OUT</button>
           <button onClick={runAnalysis} style={{padding:"8px 18px",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",fontSize:11,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer"}}>▶ RUN ANALYSIS</button>
         </div>
       </div>
