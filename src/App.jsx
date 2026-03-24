@@ -1,21 +1,64 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+
+// ─── BRAND SYSTEM ─────────────────────────────────────────────────────────────
+const BRAND = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Mono:wght@300;400;500&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap');
+
+  :root {
+    --bg:        #0B0D12;
+    --bg2:       #0F1218;
+    --bg3:       #141720;
+    --bg4:       #1A1E2A;
+    --border:    #1E2433;
+    --border2:   #252B3A;
+    --gold:      #C9A84C;
+    --gold2:     #E8C96A;
+    --gold-dim:  #5C4A1E;
+    --platinum:  #8C96A8;
+    --silver:    #B8C4D0;
+    --text:      #E8EDF5;
+    --text2:     #9BA8BC;
+    --text3:     #5A6478;
+    --green:     #1DB87A;
+    --green2:    #15875A;
+    --red:       #E84040;
+    --red2:      #A02828;
+    --amber:     #E8A020;
+    --amber2:    #A06F10;
+    --blue:      #3B82F6;
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-data:    'DM Mono', 'Courier New', monospace;
+    --font-body:    'Source Serif 4', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  @keyframes spin  { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+`;
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const STORAGE_KEY   = "bb_market_reports_v3";
+const STORAGE_KEY = "bb_market_reports_v3";
 
 const REGIME_COLORS = {
-  RISK_ON:"#22d3a8", RISK_OFF:"#f87171", TRANSITIONING:"#f59e0b", NEUTRAL:"#94a3b8",
-  GOLDILOCKS:"#22d3a8", REFLATION:"#f59e0b", STAGFLATION:"#f87171", DEFLATION:"#64748b",
+  GOLDILOCKS:"#1DB87A", REFLATION:"#E8A020", STAGFLATION:"#E84040", DEFLATION:"#5A6478",
+  RISK_ON:"#1DB87A", RISK_OFF:"#E84040", TRANSITIONING:"#E8A020", NEUTRAL:"#8C96A8",
 };
-const CONF_COLORS = { HIGH:"#22d3a8", MEDIUM:"#f59e0b", LOW:"#f87171" };
-const TAIL_COLORS  = { LOW:"#22d3a8", NORMAL:"#64748b", ELEVATED:"#f59e0b", HIGH:"#f97316", CRISIS:"#f87171" };
+const TAIL_COLORS = { LOW:"#1DB87A", NORMAL:"#5A6478", ELEVATED:"#E8A020", HIGH:"#E87020", CRISIS:"#E84040" };
 const SIGNAL_STYLE = {
-  OVERWEIGHT:  { bg:"#052e1e", text:"#22d3a8" },
-  NEUTRAL:     { bg:"#1e293b", text:"#94a3b8" },
-  UNDERWEIGHT: { bg:"#2e0505", text:"#f87171" },
+  STRONG_OVERWEIGHT: { bg:"#061A10", text:"#1DB87A", border:"#15875A" },
+  OVERWEIGHT:        { bg:"#061A10", text:"#1DB87A", border:"#0A3020" },
+  NEUTRAL:           { bg:"#141720", text:"#8C96A8", border:"#1E2433" },
+  UNDERWEIGHT:       { bg:"#1A0808", text:"#E84040", border:"#3A1010" },
+  STRONG_UNDERWEIGHT:{ bg:"#1A0808", text:"#E84040", border:"#A02828" },
 };
 
-// ─── MASTER SYSTEM PROMPT (6-Layer Institutional Framework) ───────────────────
+// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 const buildSystemPrompt = () => `You are the Chief Investment Strategist at a bulge bracket investment bank, leading an elite multi-disciplinary research team. You run a six-layer institutional top-down analysis cascading from global macro to specific S&P 500 sector recommendations using methodologies from Bridgewater, AQR, BlackRock, Goldman Sachs, Fidelity, and MSCI.
 
 TODAY: ${new Date().toISOString().split("T")[0]}
@@ -26,224 +69,40 @@ LAYER 1 — MACRO REGIME (Bridgewater Growth/Inflation Quadrant + AQR 5-Factor):
 Search for: ISM Manufacturing PMI, CFNAI, OECD CLI, Core CPI YoY, 10-year breakeven inflation, PPI, DXY, commodity index. Classify the QUADRANT: GOLDILOCKS (growth rising, inflation falling), REFLATION (both rising), STAGFLATION (growth falling, inflation rising), DEFLATION (both falling). Score growth momentum and inflation momentum each as RISING/FALLING/STABLE. Assess Dalio debt cycle phase.
 
 LAYER 2 — BUSINESS CYCLE (Fidelity AART + Merrill Lynch Investment Clock):
-Search for: yield curve shape (2s10s), ISM New Orders minus Inventories, unemployment trend, leading indicators. Classify cycle: EARLY_EXPANSION, MID_EXPANSION, LATE_EXPANSION, RECESSION. Map to investment clock position 1-12. Identify sector rotation implications using the Fidelity cycle model: Early=Discretionary/Financials/Industrials; Late=Energy/Staples/Healthcare; Recession=Staples/Healthcare/Utilities.
+Search for: yield curve shape (2s10s), ISM New Orders minus Inventories, unemployment trend, leading indicators. Classify cycle: EARLY_EXPANSION, MID_EXPANSION, LATE_EXPANSION, RECESSION. Map to investment clock position 1-12.
 
 LAYER 3 — CREDIT & LIQUIDITY CONDITIONS:
-Search for: High-yield OAS (ICE BofA HY Master II), investment-grade OAS, Chicago Fed NFCI, TED spread proxy/FRA-OIS, 10Y-2Y yield curve, VIX term structure. Rate credit regime: TIGHT(<300bps HY), NORMAL(300-450), ELEVATED(450-500), STRESS(500-700), CRISIS(>700). A HY OAS >500bps is historically the critical "red line." Chicago Fed NFCI above 0 = tighter than average.
+Search for: High-yield OAS (ICE BofA HY Master II), investment-grade OAS, Chicago Fed NFCI, 10Y-2Y yield curve, VIX term structure. Rate credit regime: TIGHT(<300bps HY), NORMAL(300-450), ELEVATED(450-500), STRESS(500-700), CRISIS(>700).
 
 LAYER 4 — FUNDAMENTAL FACTOR SCORING per sector (BlackRock/AQR/MSCI):
-For each of the 11 GICS sector ETFs (XLK, XLV, XLF, XLY, XLP, XLE, XLI, XLB, XLRE, XLU, XLC), search for and assess six factors:
-• MOMENTUM: 12-1 month total return (skip last month), trend vs 200-day MA
-• VALUE: Forward P/E relative to 10-yr historical average; EV/EBITDA; P/B
-• QUALITY: ROE, earnings stability, debt levels (high ROE + low debt = quality)
-• EARNINGS_REVISION_BREADTH: Analyst upgrades minus downgrades / total, direction
-• LOW_VOLATILITY: Realized 252-day volatility vs SPX average
-• CARRY: Dividend yield + net buyback yield
-
-Score each factor STRONG/MODERATE/WEAK/NEGATIVE. Composite sector score = 0.20×Momentum + 0.20×Value + 0.20×Quality + 0.20×ERB + 0.10×LowVol + 0.10×Carry. Output as numeric -2.0 to +2.0.
+For each of the 11 GICS sector ETFs (XLK, XLV, XLF, XLY, XLP, XLE, XLI, XLB, XLRE, XLU, XLC), assess: MOMENTUM (12-1m return), VALUE (fwd P/E vs history), QUALITY (ROE/debt), EARNINGS_REVISION_BREADTH, LOW_VOLATILITY, CARRY. Composite score -2.0 to +2.0.
 
 LAYER 5 — TECHNICAL MOMENTUM OVERLAYS:
-For each sector ETF assess:
-• Moving average trend: price vs 200-DMA, 50-DMA, golden/death cross status
-• RSI(14): <30=oversold, 30-45=weak, 45-55=neutral, 55-70=bullish, >70=overbought
-• MACD signal line cross (12,26,9): BULLISH/BEARISH/NEUTRAL
-• Relative strength vs SPX: OUTPERFORMING/INLINE/UNDERPERFORMING
-• Breadth: % constituents above 200-DMA
+For each sector ETF: price vs 200-DMA/50-DMA, RSI(14), MACD(12,26,9), relative strength vs SPX.
 
 LAYER 6 — TAIL RISK & BLACK SWAN (Bridgewater/BIS/Taleb):
-Search for and score EACH sub-category 0-100:
-• VOLATILITY_STRESS: VIX level (>30=elevated, >40=high), VIX/VIX3M ratio (>1=backwardation=stress), MOVE index (>150=elevated)
-• CREDIT_STRESS: HY OAS rate-of-change (widening fast = alert), IG OAS, CDS indices
-• FUNDING_LIQUIDITY: FRA-OIS spread, cross-currency basis, repo stress
-• SYSTEMIC_RISK: Cross-asset correlation spike, ECB CISS, SRISK
-• MACRO_VULNERABILITY: BIS credit-to-GDP gap signals, debt service ratios
-• GEOPOLITICAL_TAIL: GPR index, geopolitical events, rare disaster signals
-Composite tail risk score 0-100. Calculate tail risk dampener = max(0.25, 1.0 - max(0, (score-50)/100)). Score >70 = defensive tilt. Score >85 = emergency defensive.
-Check: Dalio depression gauge (rates at ZLB + credit > income growth), Soros reflexivity alert (price acceleration + breadth divergence), BIS early warning (credit-to-GDP gap >10pp).
+Score 0-100: volatilityStress, creditStress, fundingLiquidity, systemicRisk, macroVulnerability, geopoliticalTail. Composite tail risk dampener = max(0.25, 1.0 - max(0, (score-50)/100)).
 
-═══ FINAL COMPOSITE SCORING ═══
-For each sector:
-StrategicView = 0.50×Layer1RegimeTilt + 0.50×Layer2CycleTilt
-TacticalView  = 0.25×Layer3CreditSignal + 0.45×Layer4Fundamentals + 0.30×Layer5Technicals
-BaseScore     = 0.40×StrategicView + 0.60×TacticalView
-FinalScore    = BaseScore × TailRiskDampener
+═══ COMPOSITE SCORING ═══
+StrategicView = 0.50×L1 + 0.50×L2 | TacticalView = 0.25×L3 + 0.45×L4 + 0.30×L5
+BaseScore = 0.40×Strategic + 0.60×Tactical | FinalScore = BaseScore × TailDampener
 
-Scores: >+1.0=STRONG_OVERWEIGHT, +0.5 to 1.0=OVERWEIGHT, -0.5 to 0.5=NEUTRAL, -1.0 to -0.5=UNDERWEIGHT, <-1.0=STRONG_UNDERWEIGHT
-Confidence = 1 - (std of layer signals for this sector)/2. Round to 2dp.
-
-═══ OUTPUT INSTRUCTIONS ═══
-Respond with ONLY a single valid JSON object. No markdown fences, no text before or after. Use EXACTLY this schema:
-
+OUTPUT: ONLY a single valid JSON object. No markdown. No text before or after.
 {
-  "reportDate": "YYYY-MM-DD",
-  "reportTime": "HH:MM UTC",
-  "schemaVersion": "3.0",
-
-  "macroRegime": {
-    "quadrant": "GOLDILOCKS",
-    "growthMomentum": "RISING",
-    "inflationMomentum": "FALLING",
-    "growthZScore": 0.8,
-    "inflationZScore": -0.4,
-    "regimeConfidence": 0.72,
-    "dalioDebtCyclePhase": "Mid Expansion",
-    "regimeNarrative": "2-sentence description of current macro regime and key drivers"
-  },
-
-  "marketRegime": "RISK_ON",
-  "cyclePhase": "Mid Expansion",
-
-  "businessCycle": {
-    "phase": "MID_EXPANSION",
-    "yieldCurveSignal": "FLAT",
-    "outputGapDirection": "POSITIVE_RISING",
-    "ismPMI": "51.6",
-    "ismNewOrdersInventoriesDiff": "+4.2",
-    "clockPosition": 9,
-    "cycleNarrative": "2-sentence description of cycle positioning and key indicators"
-  },
-
-  "creditLiquidity": {
-    "hyOAS": "XXX bps",
-    "hyOASRegime": "NORMAL",
-    "igOAS": "XXX bps",
-    "nfci": "X.XX",
-    "nfciRegime": "NORMAL",
-    "yieldCurve10Y2Y": "+XX bps",
-    "vixLevel": "XX.X",
-    "vixTermStructure": "CONTANGO",
-    "moveIndex": "XXX",
-    "creditSignal": "RISK_ON",
-    "liquidityNarrative": "2-sentence description"
-  },
-
-  "macroIndicators": {
-    "fedFundsRate": "X.XX%",
-    "cpi": "X.X% YoY",
-    "corePCE": "X.X% YoY",
-    "unemployment": "X.X%",
-    "gdpGrowth": "X.X% annualized",
-    "yieldCurve10Y2Y": "+XX bps",
-    "tenYearYield": "X.XX%",
-    "twoYearYield": "X.XX%",
-    "dxy": "XXX.XX",
-    "dxyTrend": "RISING",
-    "wtiCrude": "$XX.XX",
-    "goldPrice": "$X,XXX",
-    "copperGoldRatio": "X.XX",
-    "vix": "XX.X",
-    "moveIndex": "XXX",
-    "spx": "X,XXX.XX",
-    "spxChange": "+X.XX%",
-    "spxVs200dma": "+X.X%",
-    "breakeven10Y": "X.X%",
-    "realRate10Y": "+X.XX%"
-  },
-
-  "economicEvents": [
-    { "event": "Name", "date": "YYYY-MM-DD", "impact": "HIGH", "actual": "X.X", "expected": "X.X", "prior": "X.X", "surprise": "BEAT", "marketImplication": "text", "affectedSectors": ["XLF","XLK"] }
-  ],
-
-  "topNews": [
-    { "headline": "text", "source": "name", "sentiment": "BULLISH", "sectorImpact": ["XLK"], "macroRelevance": "HIGH", "regime": "RISK_ON", "impact": "text" }
-  ],
-
-  "sectorAnalysis": [
-    {
-      "ticker": "XLK",
-      "name": "Technology",
-      "compositeScore": 1.2,
-      "signal": "OVERWEIGHT",
-      "confidence": 0.78,
-      "primaryDriver": "MOMENTUM",
-      "layerScores": {
-        "l1MacroRegime": 0.8,
-        "l2CycleTilt": 0.6,
-        "l3CreditLiq": 0.4,
-        "l4Fundamentals": 0.9,
-        "l5Technicals": 1.1
-      },
-      "factorScores": {
-        "momentum": "STRONG",
-        "momentum12m1": "+XX.X%",
-        "value": "NEUTRAL",
-        "fwdPERelative": "EXPENSIVE",
-        "quality": "HIGH",
-        "earningsRevisionBreadth": "+0.XX",
-        "erbTrend": "IMPROVING",
-        "lowVol": "MODERATE",
-        "carry": "LOW",
-        "technicalTrend": "ABOVE_200DMA",
-        "rsi14": "XX",
-        "macdSignal": "BULLISH",
-        "relStrengthVsSPX": "OUTPERFORMING"
-      },
-      "cycleAlignment": "STRONG",
-      "catalyst": "text",
-      "risk": "text",
-      "conflictingSignals": []
-    }
-  ],
-
-  "tailRisk": {
-    "compositeScore": 35,
-    "regime": "NORMAL",
-    "dampener": 1.0,
-    "subScores": {
-      "volatilityStress": 20,
-      "creditStress": 35,
-      "fundingLiquidity": 25,
-      "systemicRisk": 30,
-      "macroVulnerability": 40,
-      "geopoliticalTail": 35
-    },
-    "vixTermStructure": "CONTANGO",
-    "activeAlerts": [],
-    "blackSwanChecklist": {
-      "dalioDepressionGauge": "LOW",
-      "bisEarlyWarning": "GREEN",
-      "reflexivityAlert": false,
-      "breadthDivergence": false,
-      "creditGapWarning": false,
-      "yieldCurveInversion": false
-    },
-    "tailNarrative": "2-sentence tail risk assessment"
-  },
-
-  "recommendation": {
-    "primarySector": {
-      "ticker": "XLK",
-      "name": "Technology",
-      "conviction": "HIGH",
-      "compositeScore": 1.4,
-      "thesis": "2-3 sentence investment thesis grounded in cycle and factor analysis",
-      "timeHorizon": "4-6 weeks",
-      "entryRationale": "Specific entry reason",
-      "catalysts": ["catalyst 1", "catalyst 2"],
-      "keyRisks": ["risk 1", "risk 2"]
-    },
-    "secondarySector": {
-      "ticker": "XLF",
-      "name": "Financials",
-      "conviction": "MEDIUM",
-      "compositeScore": 0.8,
-      "thesis": "2-3 sentence thesis",
-      "timeHorizon": "4-8 weeks",
-      "entryRationale": "Entry rationale",
-      "catalysts": ["catalyst 1"],
-      "keyRisks": ["risk 1"]
-    },
-    "avoidSectors": [
-      { "ticker": "XLU", "reason": "Late-cycle proxy, expensive vs history" }
-    ],
-    "defensivePivot": false,
-    "overallRiskLevel": "MEDIUM",
-    "tailRiskAdjustment": "No dampener active - full conviction sizing",
-    "strategistNote": "2-3 sentence overarching market narrative from the chief strategist"
-  }
+  "reportDate":"YYYY-MM-DD","reportTime":"HH:MM UTC","schemaVersion":"3.0",
+  "macroRegime":{"quadrant":"GOLDILOCKS","growthMomentum":"RISING","inflationMomentum":"FALLING","growthZScore":0.8,"inflationZScore":-0.4,"regimeConfidence":0.72,"dalioDebtCyclePhase":"Mid Expansion","regimeNarrative":"text"},
+  "marketRegime":"RISK_ON","cyclePhase":"Mid Expansion",
+  "businessCycle":{"phase":"MID_EXPANSION","yieldCurveSignal":"FLAT","ismPMI":"51.6","ismNewOrdersInventoriesDiff":"+4.2","clockPosition":9,"cycleNarrative":"text"},
+  "creditLiquidity":{"hyOAS":"XXX bps","hyOASRegime":"NORMAL","igOAS":"XXX bps","nfci":"X.XX","nfciRegime":"NORMAL","vixLevel":"XX.X","vixTermStructure":"CONTANGO","moveIndex":"XXX","creditSignal":"RISK_ON","liquidityNarrative":"text"},
+  "macroIndicators":{"fedFundsRate":"X.XX%","cpi":"X.X% YoY","corePCE":"X.X% YoY","unemployment":"X.X%","gdpGrowth":"X.X% annualized","yieldCurve10Y2Y":"+XX bps","tenYearYield":"X.XX%","twoYearYield":"X.XX%","dxy":"XXX.XX","dxyTrend":"RISING","wtiCrude":"$XX.XX","goldPrice":"$X,XXX","copperGoldRatio":"X.XX","vix":"XX.X","moveIndex":"XXX","spx":"X,XXX.XX","spxChange":"+X.XX%","spxVs200dma":"+X.X%","breakeven10Y":"X.X%","realRate10Y":"+X.XX%"},
+  "economicEvents":[{"event":"Name","date":"YYYY-MM-DD","impact":"HIGH","actual":"X.X","expected":"X.X","prior":"X.X","surprise":"BEAT","marketImplication":"text","affectedSectors":["XLF"]}],
+  "topNews":[{"headline":"text","source":"name","sentiment":"BULLISH","sectorImpact":["XLK"],"macroRelevance":"HIGH","impact":"text"}],
+  "sectorAnalysis":[{"ticker":"XLK","name":"Technology","compositeScore":1.2,"signal":"OVERWEIGHT","confidence":0.78,"primaryDriver":"MOMENTUM","layerScores":{"l1MacroRegime":0.8,"l2CycleTilt":0.6,"l3CreditLiq":0.4,"l4Fundamentals":0.9,"l5Technicals":1.1},"factorScores":{"momentum":"STRONG","momentum12m1":"+XX.X%","value":"NEUTRAL","fwdPERelative":"EXPENSIVE","quality":"HIGH","earningsRevisionBreadth":"+0.XX","erbTrend":"IMPROVING","lowVol":"MODERATE","carry":"LOW","technicalTrend":"ABOVE_200DMA","rsi14":"XX","macdSignal":"BULLISH","relStrengthVsSPX":"OUTPERFORMING"},"cycleAlignment":"STRONG","catalyst":"text","risk":"text","conflictingSignals":[]}],
+  "tailRisk":{"compositeScore":35,"regime":"NORMAL","dampener":1.0,"subScores":{"volatilityStress":20,"creditStress":35,"fundingLiquidity":25,"systemicRisk":30,"macroVulnerability":40,"geopoliticalTail":35},"vixTermStructure":"CONTANGO","activeAlerts":[],"blackSwanChecklist":{"dalioDepressionGauge":"LOW","bisEarlyWarning":"GREEN","reflexivityAlert":false,"breadthDivergence":false,"creditGapWarning":false,"yieldCurveInversion":false},"tailNarrative":"text"},
+  "recommendation":{"primarySector":{"ticker":"XLK","name":"Technology","conviction":"HIGH","compositeScore":1.4,"thesis":"text","timeHorizon":"4-6 weeks","entryRationale":"text","catalysts":["c1"],"keyRisks":["r1"]},"secondarySector":{"ticker":"XLF","name":"Financials","conviction":"MEDIUM","compositeScore":0.8,"thesis":"text","timeHorizon":"4-8 weeks","entryRationale":"text","catalysts":["c1"],"keyRisks":["r1"]},"avoidSectors":[{"ticker":"XLU","reason":"text"}],"defensivePivot":false,"overallRiskLevel":"MEDIUM","tailRiskAdjustment":"text","strategistNote":"text"}
 }`;
 
-// ─── PARSE + STORAGE HELPERS ──────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 function parseReport(text) {
   const clean = text.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
   try { return JSON.parse(clean); } catch(_) {}
@@ -251,518 +110,757 @@ function parseReport(text) {
   if (m) return JSON.parse(m[0]);
   throw new Error("Could not extract valid JSON from response");
 }
-function fmtDate(d) {
+function fmtDate(d, short=false) {
   if (!d) return "—";
-  return new Date(d+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  const opts = short
+    ? { month:"short", day:"numeric" }
+    : { month:"short", day:"numeric", year:"numeric" };
+  return new Date(d+"T12:00:00Z").toLocaleDateString("en-US", opts);
 }
 function scoreColor(s) {
-  if(s==null) return "#64748b";
-  if(s>=1.0) return "#22d3a8";
-  if(s>=0.5) return "#4ade80";
-  if(s>=-0.5) return "#94a3b8";
-  if(s>=-1.0) return "#fb923c";
-  return "#f87171";
+  if (s==null) return "var(--text3)";
+  if (s>=1.0)  return "var(--green)";
+  if (s>=0.5)  return "#4DB887";
+  if (s>=-0.5) return "var(--platinum)";
+  if (s>=-1.0) return "var(--amber)";
+  return "var(--red)";
 }
 function scoreBar(s) {
-  if (s == null) return 50; // centre bar when no score
-  // convert -2..+2 to 0..100%
-  const w = ((s+2)/4)*100;
-  return Math.max(2, Math.min(98, w));
+  if (s==null) return 50;
+  return Math.max(2, Math.min(98, ((s+2)/4)*100));
+}
+function signalStyle(sig) {
+  return SIGNAL_STYLE[sig] || SIGNAL_STYLE.NEUTRAL;
+}
+function signalShort(sig) {
+  if(!sig) return "N";
+  return sig.replace("STRONG_OVERWEIGHT","S.OW").replace("OVERWEIGHT","OW")
+            .replace("STRONG_UNDERWEIGHT","S.UW").replace("UNDERWEIGHT","UW")
+            .replace("NEUTRAL","N");
 }
 
-// ─── MINI COMPONENTS ─────────────────────────────────────────────────────────
-function Card({children, style={}}) {
-  return <div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:16,...style}}>{children}</div>;
-}
-function CardTitle({children}) {
-  return <div style={{fontSize:9,color:"#334155",letterSpacing:"0.14em",textTransform:"uppercase",fontFamily:"monospace",marginBottom:12,paddingBottom:7,borderBottom:"1px solid #0d1a29"}}>{children}</div>;
-}
-function Badge({label, color="#94a3b8", small=false}) {
+// ─── BB LOGO ─────────────────────────────────────────────────────────────────
+function BBLogo({ size=36 }) {
   return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:4,background:color+"18",border:`1px solid ${color}40`,borderRadius:3,padding:small?"1px 6px":"2px 9px",fontSize:small?9:10,color,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.07em"}}>
-      {label}
-    </span>
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bbGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#E8C96A"/>
+          <stop offset="100%" stopColor="#C9A84C"/>
+        </linearGradient>
+        <linearGradient id="bbShield" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#1A1E2A"/>
+          <stop offset="100%" stopColor="#0F1218"/>
+        </linearGradient>
+      </defs>
+      {/* Shield shape */}
+      <path d="M18 2L33 8V20C33 27.5 25.5 33 18 34C10.5 33 3 27.5 3 20V8L18 2Z"
+        fill="url(#bbShield)" stroke="url(#bbGrad)" strokeWidth="1"/>
+      {/* BB monogram */}
+      <text x="18" y="23" textAnchor="middle" fill="url(#bbGrad)"
+        fontSize="12" fontWeight="700" fontFamily="'Playfair Display', Georgia, serif"
+        letterSpacing="-0.5">BB</text>
+    </svg>
   );
 }
-function RegimeBadge({regime}) {
-  const c = REGIME_COLORS[regime]||"#94a3b8";
+
+// ─── REGIME BADGE ─────────────────────────────────────────────────────────────
+function RegimeBadge({ regime, size="md" }) {
+  const c = REGIME_COLORS[regime] || "var(--platinum)";
+  const pad = size==="sm" ? "1px 7px" : "3px 11px";
+  const fs  = size==="sm" ? 9 : 10;
   return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:5,background:c+"18",border:`1px solid ${c}40`,borderRadius:4,padding:"3px 10px",fontSize:11,color:c,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em"}}>
-      <span style={{width:6,height:6,borderRadius:"50%",background:c,boxShadow:`0 0 5px ${c}`}}/>
+    <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:c+"18",
+      border:`1px solid ${c}40`, borderRadius:3, padding:pad, fontSize:fs,
+      color:c, fontFamily:"var(--font-data)", fontWeight:500, letterSpacing:"0.08em" }}>
+      <span style={{ width:5, height:5, borderRadius:"50%", background:c, boxShadow:`0 0 5px ${c}` }}/>
       {regime?.replace(/_/g," ")}
     </span>
   );
 }
-function MacroTile({label,value,sub,up=null}) {
-  const vc = up===true?"#22d3a8":up===false?"#f87171":"#e2e8f0";
+
+// ─── MACRO TILE ───────────────────────────────────────────────────────────────
+function MacroTile({ label, value, sub, trend }) {
+  const trendColor = trend==="RISING"||trend?.startsWith("+") ? "var(--green)"
+                   : trend==="FALLING"||trend?.startsWith("-") ? "var(--red)" : "var(--platinum)";
   return (
-    <div style={{background:"#0a1628",borderRadius:6,padding:"9px 13px",minWidth:95,flexShrink:0}}>
-      <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"monospace",marginBottom:3}}>{label}</div>
-      <div style={{fontSize:15,fontWeight:700,color:vc,fontFamily:"monospace"}}>{value||"—"}</div>
-      {sub&&<div style={{fontSize:10,color:vc,fontFamily:"monospace",marginTop:1}}>{sub}</div>}
-    </div>
-  );
-}
-function FactorPill({label,value,signal}) {
-  const c={STRONG:"#22d3a8",HIGH:"#22d3a8",OUTPERFORMING:"#22d3a8",BULLISH:"#22d3a8",ABOVE_200DMA:"#22d3a8",IMPROVING:"#22d3a8",
-           MODERATE:"#f59e0b",NEUTRAL:"#f59e0b",INLINE:"#94a3b8",
-           WEAK:"#f97316",EXPENSIVE:"#f97316",NEGATIVE:"#f87171",UNDERPERFORMING:"#f87171",
-           BEARISH:"#f87171",BELOW_200DMA:"#f87171",LOW:"#f97316",DETERIORATING:"#f87171"}[signal]||"#64748b";
-  return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid #0d1a29"}}>
-      <div style={{fontSize:10,color:"#475569"}}>{label}</div>
-      <div style={{display:"flex",alignItems:"center",gap:6}}>
-        {value&&<span style={{fontSize:9,color:"#334155",fontFamily:"monospace"}}>{value}</span>}
-        <span style={{fontSize:9,color:c,fontFamily:"monospace",fontWeight:700}}>{signal||"—"}</span>
-      </div>
-    </div>
-  );
-}
-function LayerBar({label,score}) {
-  const c = scoreColor(score);
-  const w = scoreBar(score);
-  return (
-    <div style={{marginBottom:5}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-        <span style={{fontSize:9,color:"#475569",fontFamily:"monospace"}}>{label}</span>
-        <span style={{fontSize:9,color:c,fontFamily:"monospace",fontWeight:700}}>{score!=null?score.toFixed(2):"—"}</span>
-      </div>
-      <div style={{height:3,background:"#0a1628",borderRadius:2,overflow:"hidden"}}>
-        <div style={{width:w+"%",height:"100%",background:c,borderRadius:2,transition:"width 0.3s"}}/>
-      </div>
-    </div>
-  );
-}
-function ScoreMeter({score, size=36}) {
-  const c = scoreColor(score);
-  const label = score==null?"—":score>=1?"S.OW":score>=0.5?"OW":score>-0.5?"N":score>-1?"UW":"S.UW";
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-      <div style={{width:size,height:size,borderRadius:"50%",border:`2px solid ${c}`,display:"flex",alignItems:"center",justifyContent:"center",background:c+"15"}}>
-        <span style={{fontSize:size*0.22,color:c,fontFamily:"monospace",fontWeight:900}}>{label}</span>
-      </div>
-      <span style={{fontSize:9,color:c,fontFamily:"monospace"}}>{score!=null?score.toFixed(1):"—"}</span>
+    <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6,
+      padding:"10px 14px", minWidth:100, flexShrink:0 }}>
+      <div style={{ fontSize:8, color:"var(--text3)", letterSpacing:"0.14em", textTransform:"uppercase",
+        fontFamily:"var(--font-data)", marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:16, fontWeight:500, color:"var(--text)", fontFamily:"var(--font-data)",
+        letterSpacing:"-0.02em" }}>{value||"—"}</div>
+      {sub && <div style={{ fontSize:10, color:trendColor, fontFamily:"var(--font-data)", marginTop:2 }}>{sub}</div>}
     </div>
   );
 }
 
-// ─── SECTOR ROW (enhanced) ────────────────────────────────────────────────────
-function SectorRow({s, onSelect, selected}) {
-  const ss = SIGNAL_STYLE[s.signal]||SIGNAL_STYLE.NEUTRAL;
+// ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
+function Card({ children, style={}, accent=false }) {
+  return (
+    <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:8,
+      padding:20, position:"relative", overflow:"hidden", ...style }}>
+      {accent && <div style={{ position:"absolute", top:0, left:0, right:0, height:2,
+        background:"linear-gradient(90deg, var(--gold), var(--gold2))" }}/>}
+      {children}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ fontSize:9, color:"var(--gold)", letterSpacing:"0.16em", textTransform:"uppercase",
+      fontFamily:"var(--font-data)", fontWeight:500, marginBottom:14, paddingBottom:8,
+      borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:8 }}>
+      <span style={{ width:16, height:1, background:"var(--gold)", display:"inline-block" }}/>
+      {children}
+      <span style={{ flex:1, height:1, background:"var(--border)", display:"inline-block" }}/>
+    </div>
+  );
+}
+
+// ─── SCORE METER ─────────────────────────────────────────────────────────────
+function ScoreMeter({ score, size=40 }) {
+  const c = scoreColor(score);
+  const label = score==null ? "—" : score>=1 ? "OW+" : score>=0.5 ? "OW" : score>-0.5 ? "N" : score>-1 ? "UW" : "UW−";
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+      <div style={{ width:size, height:size, borderRadius:"50%", border:`1.5px solid ${c}`,
+        display:"flex", alignItems:"center", justifyContent:"center", background:c+"12" }}>
+        <span style={{ fontSize:size*0.21, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{label}</span>
+      </div>
+      {score!=null && <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)" }}>{score.toFixed(2)}</span>}
+    </div>
+  );
+}
+
+// ─── LAYER BAR ────────────────────────────────────────────────────────────────
+function LayerBar({ label, score }) {
+  const c = scoreColor(score);
+  const w = scoreBar(score);
+  return (
+    <div style={{ marginBottom:6 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+        <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{label}</span>
+        <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>
+          {score!=null ? score.toFixed(2) : "—"}
+        </span>
+      </div>
+      <div style={{ height:2, background:"var(--bg4)", borderRadius:1, overflow:"hidden" }}>
+        <div style={{ width:w+"%", height:"100%", background:c, borderRadius:1 }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── FACTOR PILL ──────────────────────────────────────────────────────────────
+function FactorRow({ label, value, signal }) {
+  const c = {
+    STRONG:"var(--green)",HIGH:"var(--green)",OUTPERFORMING:"var(--green)",BULLISH:"var(--green)",
+    ABOVE_200DMA:"var(--green)",IMPROVING:"var(--green)",
+    MODERATE:"var(--amber)",NEUTRAL:"var(--amber)",INLINE:"var(--platinum)",
+    WEAK:"var(--amber)",EXPENSIVE:"var(--amber)",
+    NEGATIVE:"var(--red)",UNDERPERFORMING:"var(--red)",BEARISH:"var(--red)",
+    BELOW_200DMA:"var(--red)",LOW:"var(--amber)",DETERIORATING:"var(--red)",
+  }[signal] || "var(--text3)";
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+      padding:"5px 0", borderBottom:"1px solid var(--border)" }}>
+      <span style={{ fontSize:10, color:"var(--text3)", fontFamily:"var(--font-body)" }}>{label}</span>
+      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        {value && <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>{value}</span>}
+        <span style={{ fontSize:9, color:c, fontFamily:"var(--font-data)", fontWeight:500 }}>{signal||"—"}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── S&P 500 vs RECOMMENDATION PERFORMANCE CHART ────────────────────────────
+function PerformanceChart({ reports }) {
+  const containerRef = useRef(null);
+  if (reports.length < 2) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:160,
+      color:"var(--text3)", fontSize:11, fontFamily:"var(--font-data)" }}>
+      Run 2+ reports to see performance chart
+    </div>
+  );
+
+  const last12 = reports.slice(-12);
+  const W=560, H=130, PAD={top:16,right:20,bottom:24,left:40};
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  // Build data points
+  const pts = last12.map((r, i) => ({
+    i, date: r.reportDate,
+    spx: parseFloat((r.macroIndicators?.spxChange||"0").replace(/[^0-9.\-+]/g,"")),
+    score: r.recommendation?.primarySector?.compositeScore ?? 0,
+    regime: r.macroRegime?.quadrant || r.marketRegime,
+    sector: r.recommendation?.primarySector?.ticker || "—",
+  }));
+
+  // Normalize each series to [-2, 2] for overlay
+  const spxVals  = pts.map(p => p.spx);
+  const scoreVals= pts.map(p => p.score);
+  const minSPX = Math.min(...spxVals), maxSPX = Math.max(...spxVals);
+  const minScore= Math.min(...scoreVals), maxScore= Math.max(...scoreVals);
+
+  const toY = (val, min, max) => {
+    const range = max - min || 1;
+    return PAD.top + innerH - ((val - min) / range) * innerH;
+  };
+
+  const spxPoints  = pts.map((p,i) => ({ x: PAD.left + (i/(pts.length-1))*innerW, y: toY(p.spx, minSPX, maxSPX) }));
+  const scorePoints= pts.map((p,i) => ({ x: PAD.left + (i/(pts.length-1))*innerW, y: toY(p.score, minScore, maxScore) }));
+
+  const polyline = (pts) => pts.map(p=>`${p.x},${p.y}`).join(" ");
+  const area     = (pts, baseY) => `M${pts[0].x},${baseY} ` + pts.map(p=>`L${p.x},${p.y}`).join(" ") + ` L${pts[pts.length-1].x},${baseY} Z`;
+  const midY = PAD.top + innerH/2;
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+          <div style={{ width:20, height:2, background:"var(--green)", borderRadius:1 }}/>
+          <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>S&P 500 Daily %</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+          <div style={{ width:20, height:2, background:"var(--gold)", borderRadius:1, borderTop:"1px dashed var(--gold)" }}/>
+          <span style={{ fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Primary Sector Score</span>
+        </div>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+        <defs>
+          <linearGradient id="spxGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1DB87A" stopOpacity="0.25"/>
+            <stop offset="100%" stopColor="#1DB87A" stopOpacity="0"/>
+          </linearGradient>
+          <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#C9A84C" stopOpacity="0.2"/>
+            <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[0, 0.5, 1].map(t => {
+          const y = PAD.top + t * innerH;
+          return <line key={t} x1={PAD.left} x2={PAD.left+innerW} y1={y} y2={y}
+            stroke="var(--border)" strokeWidth="1" strokeDasharray="3,4"/>;
+        })}
+
+        {/* SPX area + line */}
+        <path d={area(spxPoints, PAD.top+innerH)} fill="url(#spxGrad)"/>
+        <polyline points={polyline(spxPoints)} fill="none" stroke="var(--green)" strokeWidth="1.5"/>
+
+        {/* Score area + dashed line */}
+        <path d={area(scorePoints, PAD.top+innerH)} fill="url(#scoreGrad)"/>
+        <polyline points={polyline(scorePoints)} fill="none" stroke="var(--gold)"
+          strokeWidth="1.5" strokeDasharray="4,3"/>
+
+        {/* Dots + date labels */}
+        {pts.map((p, i) => {
+          const x = PAD.left + (i/(pts.length-1))*innerW;
+          const c = REGIME_COLORS[p.regime] || "var(--platinum)";
+          return (
+            <g key={i}>
+              <circle cx={x} cy={spxPoints[i].y} r="3" fill="var(--green)"/>
+              <circle cx={x} cy={scorePoints[i].y} r="3" fill="var(--gold)"/>
+              {/* Sector label */}
+              <text x={x} y={H-4} textAnchor="middle" fill="var(--text3)"
+                fontSize="7" fontFamily="var(--font-data)">{p.sector}</text>
+              {/* Regime dot at bottom */}
+              <circle cx={x} cy={H-14} r="2.5" fill={c} opacity="0.7"/>
+            </g>
+          );
+        })}
+
+        {/* Y axis labels */}
+        <text x={PAD.left-4} y={PAD.top+5} textAnchor="end" fill="var(--text3)" fontSize="7" fontFamily="var(--font-data)">+</text>
+        <text x={PAD.left-4} y={PAD.top+innerH} textAnchor="end" fill="var(--text3)" fontSize="7" fontFamily="var(--font-data)">−</text>
+      </svg>
+    </div>
+  );
+}
+
+// ─── SECTOR HEATMAP ───────────────────────────────────────────────────────────
+const SECTOR_TICKERS = ["XLK","XLV","XLF","XLY","XLP","XLE","XLI","XLB","XLRE","XLU","XLC"];
+const SECTOR_SHORT   = ["Tech","Hlth","Fin","Disc","Stpls","Enrg","Ind","Matl","RE","Util","Com"];
+
+function SectorHeatmap({ reports }) {
+  if (reports.length === 0) return null;
+  const last8 = reports.slice(-8);
+  return (
+    <div style={{ overflowX:"auto" }}>
+      <div style={{ minWidth:480 }}>
+        {/* Header row */}
+        <div style={{ display:"flex", marginBottom:4 }}>
+          <div style={{ width:40, flexShrink:0 }}/>
+          {last8.map((r,i) => (
+            <div key={i} style={{ flex:1, textAlign:"center", fontSize:8, color:"var(--text3)", fontFamily:"var(--font-data)" }}>
+              {fmtDate(r.reportDate, true)}
+            </div>
+          ))}
+        </div>
+        {/* Sector rows */}
+        {SECTOR_TICKERS.map((ticker, si) => (
+          <div key={ticker} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
+            <div style={{ width:40, fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)", flexShrink:0 }}>
+              {SECTOR_SHORT[si]}
+            </div>
+            {last8.map((r, ri) => {
+              const sa = r.sectorAnalysis?.find(s=>s.ticker===ticker);
+              const score = sa?.compositeScore ?? null;
+              const c = scoreColor(score);
+              const opacity = score!=null ? 0.15 + Math.abs(score)/2*0.6 : 0.05;
+              return (
+                <div key={ri} style={{ flex:1, height:22, background:c, opacity, borderRadius:2,
+                  margin:"0 1px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {score!=null && <span style={{ fontSize:7.5, color:"var(--text)", fontFamily:"var(--font-data)",
+                    opacity:2.5 }}>{score.toFixed(1)}</span>}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        {/* Regime row */}
+        <div style={{ display:"flex", alignItems:"center", marginTop:6 }}>
+          <div style={{ width:40, fontSize:9, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Regime</div>
+          {last8.map((r,i) => {
+            const q = r.macroRegime?.quadrant||r.marketRegime;
+            const c = REGIME_COLORS[q]||"var(--text3)";
+            return <div key={i} style={{ flex:1, height:4, background:c, borderRadius:1, margin:"0 1px" }}/>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MACRO QUADRANT ───────────────────────────────────────────────────────────
+function MacroQuadrantWidget({ mr }) {
+  if (!mr) return null;
+  const gz = mr.growthZScore||0, iz = mr.inflationZScore||0;
+  const dotX = ((iz+2)/4)*100;
+  const dotY = 100 - ((gz+2)/4)*100;
+  const qc = REGIME_COLORS[mr.quadrant]||"var(--platinum)";
+  return (
+    <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+      <div style={{ position:"relative", width:110, height:110, flexShrink:0,
+        border:"1px solid var(--border)", borderRadius:5, overflow:"hidden", background:"var(--bg)" }}>
+        {[{x:0,y:0,l:"GOLD",c:"var(--green)"},{x:50,y:0,l:"REFL",c:"var(--amber)"},
+          {x:0,y:50,l:"DEFL",c:"var(--text3)"},{x:50,y:50,l:"STAG",c:"var(--red)"}
+        ].map(({x,y,l,c})=>(
+          <div key={l} style={{position:"absolute",left:x+"%",top:y+"%",width:"50%",height:"50%",
+            background:c+"10",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:7,color:c,fontFamily:"var(--font-data)",opacity:0.6}}>{l}</span>
+          </div>
+        ))}
+        <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"var(--border)"}}/>
+        <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:"var(--border)"}}/>
+        <div style={{position:"absolute",left:`calc(${dotX}% - 6px)`,top:`calc(${dotY}% - 6px)`,
+          width:12,height:12,borderRadius:"50%",background:qc,boxShadow:`0 0 8px ${qc}`,zIndex:10}}/>
+        <div style={{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",
+          fontSize:6,color:"var(--text3)",fontFamily:"var(--font-data)"}}>INFLATION →</div>
+      </div>
+      <div style={{flex:1}}>
+        <RegimeBadge regime={mr.quadrant}/>
+        {mr.regimeConfidence != null && (
+          <div style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:5}}>
+            Confidence: <span style={{color:mr.regimeConfidence>0.6?"var(--green)":"var(--amber)"}}>
+              {Math.round(mr.regimeConfidence*100)}%
+            </span>
+          </div>
+        )}
+        <div style={{display:"flex",gap:12,marginTop:6}}>
+          {[["Growth",mr.growthMomentum],["Inflation",mr.inflationMomentum]].map(([l,v])=>(
+            <div key={l}>
+              <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:2}}>{l}</div>
+              <div style={{fontSize:10,fontFamily:"var(--font-data)",fontWeight:500,
+                color:{RISING:"var(--green)",FALLING:"var(--red)",STABLE:"var(--platinum)"}[v]||"var(--platinum)"}}>
+                {v||"—"}
+              </div>
+            </div>
+          ))}
+        </div>
+        {mr.regimeNarrative && (
+          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",
+            lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>{mr.regimeNarrative}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── INVESTMENT CLOCK ─────────────────────────────────────────────────────────
+function InvestmentClockWidget({ bc }) {
+  if (!bc) return null;
+  const pos = bc.clockPosition||9;
+  const rad = (pos/12)*2*Math.PI - Math.PI/2;
+  const hx = 50 + 34*Math.cos(rad), hy = 50 + 34*Math.sin(rad);
+  return (
+    <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
+      <div style={{width:110,height:110,flexShrink:0,position:"relative"}}>
+        <svg viewBox="0 0 100 100" style={{width:"100%",height:"100%"}}>
+          {[{d:"M50,50 L50,10 A40,40 0 0,1 90,50 Z",c:"#1DB87A18",l:"EARLY",lx:72,ly:28},
+            {d:"M50,50 L90,50 A40,40 0 0,1 50,90 Z",c:"#E8A02018",l:"LATE",lx:72,ly:72},
+            {d:"M50,50 L50,90 A40,40 0 0,1 10,50 Z",c:"#E8404018",l:"RECESS",lx:16,ly:72},
+            {d:"M50,50 L10,50 A40,40 0 0,1 50,10 Z",c:"#8C96A818",l:"RECOV",lx:20,ly:28}
+          ].map(({d,c,l,lx,ly})=>(
+            <g key={l}>
+              <path d={d} fill={c}/>
+              <text x={lx} y={ly} textAnchor="middle" fill="var(--text3)" fontSize="5" fontFamily="var(--font-data)">{l}</text>
+            </g>
+          ))}
+          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border)" strokeWidth="1"/>
+          <circle cx="50" cy="50" r="2.5" fill="var(--text3)"/>
+          {Array.from({length:12},(_,i)=>{
+            const a=(i/12)*2*Math.PI-Math.PI/2;
+            return <line key={i} x1={50+34*Math.cos(a)} y1={50+34*Math.sin(a)}
+              x2={50+39*Math.cos(a)} y2={50+39*Math.sin(a)} stroke="var(--border)" strokeWidth="0.8"/>;
+          })}
+          <line x1="50" y1="50" x2={hx} y2={hy} stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx={hx} cy={hy} r="2.5" fill="var(--gold)"/>
+          <text x="50" y="54" textAnchor="middle" fill="var(--gold)" fontSize="5.5" fontFamily="var(--font-data)">{pos}:00</text>
+        </svg>
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",marginBottom:6}}>
+          {bc.phase?.replace(/_/g," ")||"—"}
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {bc.ismPMI && (
+            <span style={{fontSize:9,color:parseFloat(bc.ismPMI)>50?"var(--green)":"var(--red)",
+              fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",
+              borderRadius:3,padding:"1px 7px"}}>PMI {bc.ismPMI}</span>
+          )}
+          <span style={{fontSize:9,color:{STEEPENING:"var(--green)",INVERTED:"var(--red)",FLAT:"var(--amber)"}[bc.yieldCurveSignal]||"var(--platinum)",
+            fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",
+            borderRadius:3,padding:"1px 7px"}}>CURVE {bc.yieldCurveSignal||"—"}</span>
+        </div>
+        {bc.cycleNarrative && (
+          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
+            {bc.cycleNarrative}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CREDIT PANEL ─────────────────────────────────────────────────────────────
+function CreditPanel({ cl }) {
+  if (!cl) return null;
+  const hyN = parseInt(cl.hyOAS)||0;
+  const hyC = hyN>700?"var(--red)":hyN>500?"var(--amber)":hyN>300?"var(--platinum)":"var(--green)";
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        {[
+          {l:"HY OAS",v:cl.hyOAS,c:hyC,s:cl.hyOASRegime},
+          {l:"IG OAS",v:cl.igOAS,c:"var(--platinum)"},
+          {l:"NFCI",v:cl.nfci,c:parseFloat(cl.nfci)>0?"var(--amber)":"var(--green)",s:cl.nfciRegime},
+          {l:"MOVE",v:cl.moveIndex,c:parseInt(cl.moveIndex)>150?"var(--red)":"var(--platinum)"},
+        ].map(({l,v,c,s})=>(
+          <div key={l} style={{background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:5,padding:"8px 10px"}}>
+            <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:3,letterSpacing:"0.1em"}}>{l}</div>
+            <div style={{fontSize:14,fontWeight:500,color:c,fontFamily:"var(--font-data)"}}>{v||"—"}</div>
+            {s && <div style={{fontSize:8,color:c,fontFamily:"var(--font-data)",marginTop:1}}>{s}</div>}
+          </div>
+        ))}
+      </div>
+      {/* HY threshold bar */}
+      <div style={{marginBottom:8}}>
+        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",marginBottom:4,letterSpacing:"0.1em"}}>HY OAS REGIME THRESHOLDS</div>
+        <div style={{display:"flex",height:5,borderRadius:2,overflow:"hidden",gap:1}}>
+          {[["TIGHT",20,"var(--green)"],["NORMAL",30,"#4DB887"],["ELEVATED",15,"var(--amber)"],["STRESS",20,"var(--amber2)"],["CRISIS",15,"var(--red)"]].map(([l,w,c])=>(
+            <div key={l} style={{flex:w,background:c,opacity:cl.hyOASRegime===l?1:0.2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:5.5,color:"var(--bg)",fontFamily:"var(--font-data)",fontWeight:700}}>{l}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {cl.liquidityNarrative && (
+        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.5,fontStyle:"italic"}}>
+          {cl.liquidityNarrative}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── TAIL RISK PANEL ──────────────────────────────────────────────────────────
+function TailRiskWidget({ tailRisk }) {
+  if (!tailRisk) return null;
+  const sc = tailRisk.compositeScore||0;
+  const c  = TAIL_COLORS[tailRisk.regime]||"var(--platinum)";
+  const ss = tailRisk.subScores||{};
+  const bsc= tailRisk.blackSwanChecklist||{};
+  const subKeys=[["volatilityStress","VOL STRESS"],["creditStress","CREDIT"],["fundingLiquidity","FUNDING"],["systemicRisk","SYSTEMIC"],["macroVulnerability","MACRO VULN"],["geopoliticalTail","GEO RISK"]];
+  return (
+    <div>
+      <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:14}}>
+        <div style={{position:"relative",width:64,height:64,flexShrink:0}}>
+          <svg viewBox="0 0 36 36" style={{width:"100%",height:"100%",transform:"rotate(-90deg)"}}>
+            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--bg4)" strokeWidth="3"/>
+            <circle cx="18" cy="18" r="15" fill="none" stroke={c} strokeWidth="3"
+              strokeDasharray={`${(sc/100)*94.2} 94.2`} strokeLinecap="round"/>
+          </svg>
+          <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:14,fontWeight:700,color:c,fontFamily:"var(--font-data)"}}>{sc}</span>
+            <span style={{fontSize:7,color:c,fontFamily:"var(--font-data)"}}>/ 100</span>
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:15,fontWeight:600,color:c,fontFamily:"var(--font-display)"}}>{tailRisk.regime}</div>
+          <div style={{fontSize:9,color:"var(--text3)",marginTop:2}}>
+            Dampener: <span style={{color:c,fontFamily:"var(--font-data)"}}>{tailRisk.dampener?.toFixed(2)||"1.00"}×</span>
+          </div>
+        </div>
+      </div>
+      <div style={{marginBottom:12}}>
+        {subKeys.map(([k,label])=>{
+          const v=ss[k]||0;
+          const bc=v>=70?"var(--red)":v>=50?"var(--amber)":"var(--border2)";
+          return (
+            <div key={k} style={{marginBottom:5}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                <span style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{label}</span>
+                <span style={{fontSize:8,color:bc,fontFamily:"var(--font-data)",fontWeight:500}}>{v}</span>
+              </div>
+              <div style={{height:2,background:"var(--bg4)",borderRadius:1,overflow:"hidden"}}>
+                <div style={{width:v+"%",height:"100%",background:bc,borderRadius:1}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <div style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",marginBottom:7}}>
+          BLACK SWAN CHECKLIST
+        </div>
+        {[
+          ["Dalio Depression Gauge", bsc.dalioDepressionGauge==="LOW"],
+          ["BIS Early Warning",      bsc.bisEarlyWarning==="GREEN"],
+          ["Soros Reflexivity",      !bsc.reflexivityAlert],
+          ["Breadth Divergence",     !bsc.breadthDivergence],
+          ["Credit Gap (>10pp)",     !bsc.creditGapWarning],
+          ["Yield Curve Inversion",  !bsc.yieldCurveInversion],
+        ].map(([label,ok])=>(
+          <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid var(--border)"}}>
+            <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-body)"}}>{label}</span>
+            <span style={{fontSize:9,color:ok?"var(--green)":"var(--amber)",fontFamily:"var(--font-data)"}}>
+              {ok ? "✓ CLEAR" : "⚠ ALERT"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── SECTOR ROW ───────────────────────────────────────────────────────────────
+function SectorRow({ s, onSelect, selected }) {
+  const ss = signalStyle(s.signal);
   const sc = scoreColor(s.compositeScore);
   return (
-    <div onClick={()=>onSelect(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",borderBottom:"1px solid #0d1a29",cursor:"pointer",background:selected?"#0a1628":"transparent",borderRadius:4,transition:"background 0.1s"}}>
-      <div style={{width:36,fontSize:10,color:"#64748b",fontFamily:"monospace"}}>{s.ticker}</div>
-      <div style={{flex:1,fontSize:11,color:"#cbd5e1"}}>{s.name}</div>
-      {/* mini score bar */}
-      <div style={{width:50,height:4,background:"#0a1628",borderRadius:2,overflow:"hidden"}}>
-        <div style={{width:scoreBar(s.compositeScore)+"%",height:"100%",background:sc,borderRadius:2}}/>
+    <div onClick={()=>onSelect(s)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",
+      borderBottom:"1px solid var(--border)",cursor:"pointer",background:selected?"var(--bg3)":"transparent",
+      borderRadius:4,transition:"background 0.1s"}}>
+      <div style={{width:36,fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
+      <div style={{flex:1,fontSize:11,color:"var(--text2)",fontFamily:"var(--font-body)"}}>{s.name}</div>
+      <div style={{width:48,height:3,background:"var(--bg4)",borderRadius:1,overflow:"hidden"}}>
+        <div style={{width:scoreBar(s.compositeScore)+"%",height:"100%",background:sc,borderRadius:1}}/>
       </div>
-      <div style={{width:28,textAlign:"right",fontSize:10,fontWeight:700,color:sc,fontFamily:"monospace"}}>{s.compositeScore!=null?s.compositeScore.toFixed(1):"—"}</div>
-      <div style={{fontSize:9,fontWeight:700,color:ss.text,background:ss.bg,borderRadius:3,padding:"1px 5px",fontFamily:"monospace",minWidth:22,textAlign:"center"}}>
-        {(s.signal||"N").replace("STRONG_OVERWEIGHT","S.OW").replace("OVERWEIGHT","OW").replace("UNDERWEIGHT","UW").replace("STRONG_UNDERWEIGHT","S.UW").replace("NEUTRAL","N")}
+      <div style={{width:30,textAlign:"right",fontSize:9,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>
+        {s.compositeScore!=null?s.compositeScore.toFixed(1):"—"}
+      </div>
+      <div style={{fontSize:9,fontWeight:500,color:ss.text,background:ss.bg,
+        border:`1px solid ${ss.border}`,borderRadius:3,padding:"1px 5px",
+        fontFamily:"var(--font-data)",minWidth:26,textAlign:"center"}}>
+        {signalShort(s.signal)}
       </div>
     </div>
   );
 }
 
 // ─── SECTOR DETAIL PANEL ──────────────────────────────────────────────────────
-function SectorDetailPanel({s}) {
-  if(!s) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:"#1e3a5f",fontSize:11,fontFamily:"monospace"}}>Select a sector to see detail</div>
+function SectorDetailPanel({ s }) {
+  if (!s) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",
+      color:"var(--text3)",fontSize:11,fontFamily:"var(--font-data)"}}>
+      Select a sector ↑
+    </div>
   );
-  const f = s.factorScores||{};
+  const f  = s.factorScores||{};
   const ls = s.layerScores||{};
-  const cc = scoreColor(s.compositeScore);
   return (
     <div style={{height:"100%",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
-          <div style={{fontSize:16,fontWeight:800,color:"#e2e8f0",letterSpacing:"-0.01em"}}>{s.name}</div>
-          <div style={{fontSize:11,color:"#475569",fontFamily:"monospace"}}>{s.ticker}</div>
+          <div style={{fontSize:15,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)"}}>{s.name}</div>
+          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s.ticker}</div>
         </div>
-        <ScoreMeter score={s.compositeScore} size={44}/>
+        <ScoreMeter score={s.compositeScore} size={42}/>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-        {s.confidence!=null&&<Badge label={`${Math.round(s.confidence*100)}% CONF`} color={s.confidence>0.65?"#22d3a8":s.confidence>0.4?"#f59e0b":"#f87171"} small/>}
-        {s.primaryDriver&&<Badge label={s.primaryDriver} color="#1d4ed8" small/>}
-        {s.cycleAlignment&&<Badge label={`CYCLE: ${s.cycleAlignment}`} color={s.cycleAlignment==="STRONG"?"#22d3a8":s.cycleAlignment==="MODERATE"?"#f59e0b":"#f87171"} small/>}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+        {s.confidence!=null && <span style={{fontSize:8,color:s.confidence>0.65?"var(--green)":"var(--amber)",
+          fontFamily:"var(--font-data)",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:3,padding:"1px 6px"}}>
+          {Math.round(s.confidence*100)}% CONF</span>}
+        {s.primaryDriver && <span style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",
+          background:"var(--bg3)",border:"1px solid var(--gold-dim)",borderRadius:3,padding:"1px 6px"}}>{s.primaryDriver}</span>}
       </div>
-      {/* Layer scores */}
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",fontFamily:"monospace",marginBottom:8}}>LAYER SCORES</div>
-        <LayerBar label="L1 Macro Regime" score={ls.l1MacroRegime}/>
-        <LayerBar label="L2 Cycle Tilt" score={ls.l2CycleTilt}/>
-        <LayerBar label="L3 Credit/Liq" score={ls.l3CreditLiq}/>
-        <LayerBar label="L4 Fundamentals" score={ls.l4Fundamentals}/>
-        <LayerBar label="L5 Technicals" score={ls.l5Technicals}/>
-      </div>
-      {/* Factor scores */}
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",fontFamily:"monospace",marginBottom:8}}>FACTOR SCORES</div>
-        <FactorPill label="Momentum (12-1m)" value={f.momentum12m1} signal={f.momentum}/>
-        <FactorPill label="Valuation (Fwd P/E)" value={f.fwdPERelative} signal={f.value}/>
-        <FactorPill label="Quality (ROE/Debt)" signal={f.quality}/>
-        <FactorPill label="Earnings Revisions" value={f.earningsRevisionBreadth} signal={f.erbTrend}/>
-        <FactorPill label="Low Volatility" signal={f.lowVol}/>
-        <FactorPill label="Carry / Yield" signal={f.carry}/>
-        <FactorPill label="RSI(14)" value={f.rsi14} signal={parseFloat(f.rsi14)>70?"OVERBOUGHT":parseFloat(f.rsi14)<30?"OVERSOLD":parseFloat(f.rsi14)>55?"BULLISH":"NEUTRAL"}/>
-        <FactorPill label="MACD Signal" signal={f.macdSignal}/>
-        <FactorPill label="Price vs 200-DMA" signal={f.technicalTrend}/>
-        <FactorPill label="Rel Strength vs SPX" signal={f.relStrengthVsSPX}/>
-      </div>
-      {/* Thesis */}
-      {s.catalyst&&<div style={{marginBottom:8}}>
-        <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",fontFamily:"monospace",marginBottom:4}}>CATALYST</div>
-        <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.5}}>{s.catalyst}</div>
-      </div>}
-      {s.risk&&<div>
-        <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",fontFamily:"monospace",marginBottom:4}}>KEY RISK</div>
-        <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>{s.risk}</div>
-      </div>}
-      {s.conflictingSignals?.length>0&&<div style={{marginTop:8,background:"#1a0505",borderRadius:4,padding:"6px 10px"}}>
-        <div style={{fontSize:9,color:"#7f1d1d",fontFamily:"monospace",marginBottom:4}}>CONFLICTING SIGNALS</div>
-        {s.conflictingSignals.map((cs,i)=><div key={i} style={{fontSize:10,color:"#f87171"}}>{cs}</div>)}
-      </div>}
-    </div>
-  );
-}
-
-// ─── TAIL RISK PANEL ──────────────────────────────────────────────────────────
-function TailRiskPanel({tailRisk}) {
-  if(!tailRisk) return <Card><CardTitle>Tail Risk Monitor</CardTitle><div style={{color:"#1e3a5f",fontSize:11,fontFamily:"monospace"}}>No data</div></Card>;
-  const sc = tailRisk.compositeScore||0;
-  const c  = TAIL_COLORS[tailRisk.regime]||"#94a3b8";
-  const ss = tailRisk.subScores||{};
-  const bsc= tailRisk.blackSwanChecklist||{};
-  const subKeys=[["volatilityStress","VOL STRESS"],["creditStress","CREDIT STRESS"],["fundingLiquidity","FUNDING LIQ"],["systemicRisk","SYSTEMIC"],["macroVulnerability","MACRO VULN"],["geopoliticalTail","GEO/TAIL"]];
-  return (
-    <Card>
-      <CardTitle>Layer 6 — Tail Risk Monitor</CardTitle>
-      {/* Composite */}
-      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
-        <div style={{position:"relative",width:60,height:60,flexShrink:0}}>
-          <svg viewBox="0 0 36 36" style={{width:"100%",height:"100%",transform:"rotate(-90deg)"}}>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#0a1628" strokeWidth="3"/>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke={c} strokeWidth="3"
-              strokeDasharray={`${sc} ${100-sc}`} strokeLinecap="round"/>
-          </svg>
-          <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:13,fontWeight:900,color:c,fontFamily:"monospace"}}>{sc}</span>
-            <span style={{fontSize:7,color:c,fontFamily:"monospace"}}>/ 100</span>
-          </div>
-        </div>
-        <div>
-          <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"monospace",letterSpacing:"0.05em"}}>{tailRisk.regime}</div>
-          <div style={{fontSize:10,color:"#64748b",marginTop:2}}>Dampener: <span style={{color:c,fontFamily:"monospace"}}>{tailRisk.dampener?.toFixed(2)||"1.00"}×</span></div>
-          <div style={{fontSize:10,color:"#64748b"}}>VIX structure: <span style={{color:"#94a3b8",fontFamily:"monospace"}}>{tailRisk.vixTermStructure||"—"}</span></div>
-        </div>
-      </div>
-      {/* Sub-scores */}
-      <div style={{marginBottom:12}}>
-        {subKeys.map(([k,label])=>{
-          const v=ss[k]||0;
-          const bc=v>=70?"#f87171":v>=50?"#f59e0b":"#334155";
-          return (
-            <div key={k} style={{marginBottom:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                <span style={{fontSize:9,color:"#475569",fontFamily:"monospace"}}>{label}</span>
-                <span style={{fontSize:9,color:bc,fontFamily:"monospace",fontWeight:700}}>{v}</span>
-              </div>
-              <div style={{height:3,background:"#0a1628",borderRadius:2,overflow:"hidden"}}>
-                <div style={{width:v+"%",height:"100%",background:bc,borderRadius:2}}/>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {/* Black swan checklist */}
       <div style={{marginBottom:10}}>
-        <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",fontFamily:"monospace",marginBottom:7}}>BLACK SWAN CHECKLIST</div>
-        {[
-          ["dalioDepressionGauge","Dalio Depression Gauge",bsc.dalioDepressionGauge==="LOW"?"✓":"⚠"],
-          ["bisEarlyWarning","BIS Early Warning",bsc.bisEarlyWarning==="GREEN"?"✓":"⚠"],
-          ["reflexivityAlert","Soros Reflexivity",!bsc.reflexivityAlert?"✓":"⚠"],
-          ["breadthDivergence","Breadth Divergence",!bsc.breadthDivergence?"✓":"⚠"],
-          ["creditGapWarning","Credit Gap (BIS >10pp)",!bsc.creditGapWarning?"✓":"⚠"],
-          ["yieldCurveInversion","Yield Curve Inversion",!bsc.yieldCurveInversion?"✓":"⚠"],
-        ].map(([k,label,icon])=>{
-          const ok=icon==="✓";
-          return <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid #0d1a29"}}>
-            <span style={{fontSize:10,color:"#475569"}}>{label}</span>
-            <span style={{fontSize:10,color:ok?"#22d3a8":"#f59e0b",fontFamily:"monospace"}}>{icon} {ok?"CLEAR":"ALERT"}</span>
-          </div>;
-        })}
+        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>LAYER SCORES</div>
+        <LayerBar label="L1 Macro Regime" score={ls.l1MacroRegime}/>
+        <LayerBar label="L2 Cycle Tilt"   score={ls.l2CycleTilt}/>
+        <LayerBar label="L3 Credit/Liq"   score={ls.l3CreditLiq}/>
+        <LayerBar label="L4 Fundamentals" score={ls.l4Fundamentals}/>
+        <LayerBar label="L5 Technicals"   score={ls.l5Technicals}/>
       </div>
-      {/* Active alerts */}
-      {tailRisk.activeAlerts?.length>0&&<div style={{background:"#1a0a00",borderRadius:4,padding:"8px 10px"}}>
-        <div style={{fontSize:9,color:"#7c3803",fontFamily:"monospace",marginBottom:4}}>ACTIVE ALERTS</div>
-        {tailRisk.activeAlerts.map((a,i)=><div key={i} style={{fontSize:10,color:"#f97316",lineHeight:1.4}}>{a}</div>)}
+      <div style={{marginBottom:10}}>
+        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em",marginBottom:6}}>FACTOR SCORES</div>
+        <FactorRow label="Momentum (12-1m)"    value={f.momentum12m1} signal={f.momentum}/>
+        <FactorRow label="Valuation (Fwd P/E)" value={f.fwdPERelative} signal={f.value}/>
+        <FactorRow label="Quality (ROE/Debt)"  signal={f.quality}/>
+        <FactorRow label="Earnings Revisions"  value={f.earningsRevisionBreadth} signal={f.erbTrend}/>
+        <FactorRow label="Low Volatility"      signal={f.lowVol}/>
+        <FactorRow label="Carry / Yield"       signal={f.carry}/>
+        <FactorRow label={`RSI(14): ${f.rsi14||"—"}`} signal={parseFloat(f.rsi14)>70?"OVERBOUGHT":parseFloat(f.rsi14)<30?"OVERSOLD":parseFloat(f.rsi14)>55?"BULLISH":"NEUTRAL"}/>
+        <FactorRow label="MACD Signal"  signal={f.macdSignal}/>
+        <FactorRow label="vs SPX"       signal={f.relStrengthVsSPX}/>
+      </div>
+      {s.catalyst && <div style={{marginBottom:8}}>
+        <div style={{fontSize:8,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYST</div>
+        <div style={{fontSize:10,color:"var(--text3)",lineHeight:1.5}}>{s.catalyst}</div>
       </div>}
-      {tailRisk.tailNarrative&&<div style={{marginTop:10,fontSize:11,color:"#64748b",lineHeight:1.5,fontStyle:"italic"}}>{tailRisk.tailNarrative}</div>}
-    </Card>
+      {s.risk && <div>
+        <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ RISK</div>
+        <div style={{fontSize:10,color:"var(--text3)",lineHeight:1.5}}>{s.risk}</div>
+      </div>}
+    </div>
   );
 }
 
-// ─── MACRO QUADRANT WIDGET ────────────────────────────────────────────────────
-function MacroQuadrant({macroRegime}) {
-  if(!macroRegime) return null;
-  const gz = macroRegime.growthZScore||0;
-  const iz = macroRegime.inflationZScore||0;
-  // dot position: x = inflation, y = -growth (because CSS y-axis is inverted)
-  const dotX = ((iz+2)/4)*100;
-  const dotY = ((gz+2)/4)*100;
-  const qc   = REGIME_COLORS[macroRegime.quadrant]||"#94a3b8";
+// ─── REC CARD ─────────────────────────────────────────────────────────────────
+function RecCard({ rec, primary }) {
+  if (!rec) return null;
+  const convC = {HIGH:"var(--green)",MEDIUM:"var(--amber)",LOW:"var(--red)"}[rec.conviction]||"var(--platinum)";
   return (
-    <Card>
-      <CardTitle>Layer 1 — Macro Regime · Bridgewater Quadrant</CardTitle>
-      <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-        {/* quadrant plot */}
-        <div style={{position:"relative",width:120,height:120,flexShrink:0,border:"1px solid #0f2037",borderRadius:6,overflow:"hidden",background:"#030d18"}}>
-          {/* quadrant shading */}
-          {[{x:0,y:0,label:"GOLD",c:"#22d3a818"},{x:50,y:0,label:"REFLAT",c:"#f59e0b18"},{x:0,y:50,label:"DEFLAT",c:"#64748b18"},{x:50,y:50,label:"STAGFL",c:"#f8717118"}].map(({x,y,label,c})=>(
-            <div key={label} style={{position:"absolute",left:x+"%",top:y+"%",width:"50%",height:"50%",background:c,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:7,color:"#1e3a5f",fontFamily:"monospace"}}>{label}</span>
-            </div>
-          ))}
-          {/* axes */}
-          <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"#0f2037"}}/>
-          <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:"#0f2037"}}/>
-          {/* dot - x=inflation, y inverted for growth */}
-          <div style={{position:"absolute",left:`calc(${dotX}% - 6px)`,top:`calc(${100-dotY}% - 6px)`,width:12,height:12,borderRadius:"50%",background:qc,boxShadow:`0 0 8px ${qc}`,zIndex:10}}/>
-          {/* axis labels */}
-          <div style={{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",fontSize:6,color:"#1e3a5f",fontFamily:"monospace"}}>INFLATION →</div>
-          <div style={{position:"absolute",left:2,top:"50%",transform:"translateY(-50%) rotate(-90deg)",fontSize:6,color:"#1e3a5f",fontFamily:"monospace",transformOrigin:"center"}}>GROWTH</div>
-        </div>
-        {/* regime details */}
-        <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <RegimeBadge regime={macroRegime.quadrant}/>
-            {macroRegime.regimeConfidence!=null&&<Badge label={`${Math.round(macroRegime.regimeConfidence*100)}% CONF`} color={macroRegime.regimeConfidence>0.6?"#22d3a8":"#f59e0b"} small/>}
-          </div>
-          <div style={{display:"flex",gap:8,marginBottom:6}}>
-            <div style={{fontSize:10,color:"#475569"}}>Growth: <span style={{color:{RISING:"#22d3a8",FALLING:"#f87171",STABLE:"#94a3b8"}[macroRegime.growthMomentum]||"#94a3b8",fontFamily:"monospace",fontWeight:700}}>{macroRegime.growthMomentum||"—"}</span></div>
-            <div style={{fontSize:10,color:"#475569"}}>Inflation: <span style={{color:{RISING:"#f87171",FALLING:"#22d3a8",STABLE:"#94a3b8"}[macroRegime.inflationMomentum]||"#94a3b8",fontFamily:"monospace",fontWeight:700}}>{macroRegime.inflationMomentum||"—"}</span></div>
-          </div>
-          <div style={{fontSize:10,color:"#475569",marginBottom:4}}>Dalio Cycle: <span style={{color:"#94a3b8"}}>{macroRegime.dalioDebtCyclePhase||"—"}</span></div>
-          {macroRegime.regimeNarrative&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>{macroRegime.regimeNarrative}</div>}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// ─── INVESTMENT CLOCK WIDGET ──────────────────────────────────────────────────
-function InvestmentClock({businessCycle}) {
-  if(!businessCycle) return null;
-  const pos   = businessCycle.clockPosition||9;
-  // Correct clock-hand math: pos=12→up, pos=3→right, pos=6→down, pos=9→left
-  const rad = (pos / 12) * 2 * Math.PI - Math.PI / 2;
-  const cx=50, cy=50, r=35;
-  const hx = cx + r*Math.cos(rad);
-  const hy = cy + r*Math.sin(rad);
-  return (
-    <Card>
-      <CardTitle>Layer 2 — Business Cycle · Investment Clock</CardTitle>
-      <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-        <div style={{width:110,height:110,flexShrink:0,position:"relative"}}>
-          <svg viewBox="0 0 100 100" style={{width:"100%",height:"100%"}}>
-            {/* Quadrant arcs */}
-            {[{d:"M50,50 L50,10 A40,40 0 0,1 90,50 Z",c:"#22d3a818",l:"EARLY",lx:72,ly:28},
-              {d:"M50,50 L90,50 A40,40 0 0,1 50,90 Z",c:"#f59e0b18",l:"LATE",lx:72,ly:72},
-              {d:"M50,50 L50,90 A40,40 0 0,1 10,50 Z",c:"#f8717118",l:"RECESS",lx:16,ly:72},
-              {d:"M50,50 L10,50 A40,40 0 0,1 50,10 Z",c:"#64748b18",l:"RECOV",lx:20,ly:28}
-            ].map(({d,c,l,lx,ly})=>(
-              <g key={l}><path d={d} fill={c}/><text x={lx} y={ly} textAnchor="middle" fill="#1e3a5f" fontSize="5" fontFamily="monospace">{l}</text></g>
-            ))}
-            <circle cx="50" cy="50" r="40" fill="none" stroke="#0f2037" strokeWidth="1"/>
-            <circle cx="50" cy="50" r="3" fill="#334155"/>
-            {/* Hour marks */}
-            {Array.from({length:12},(_,i)=>{
-              const a=(i/12)*360; const ar=(a-90)*Math.PI/180;
-              return <line key={i} x1={50+33*Math.cos(ar)} y1={50+33*Math.sin(ar)} x2={50+38*Math.cos(ar)} y2={50+38*Math.sin(ar)} stroke="#0f2037" strokeWidth="0.8"/>;
-            })}
-            {/* Hand */}
-            <line x1="50" y1="50" x2={hx} y2={hy} stroke="#22d3a8" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx={hx} cy={hy} r="3" fill="#22d3a8" style={{filter:"drop-shadow(0 0 4px #22d3a8)"}}/>
-            {/* Position label */}
-            <text x="50" y="53" textAnchor="middle" fill="#22d3a8" fontSize="6" fontFamily="monospace">{pos}:00</text>
-          </svg>
-        </div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,fontWeight:700,color:"#e2e8f0",marginBottom:4}}>{businessCycle.phase?.replace(/_/g," ")||"—"}</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-            <Badge label={`YIELD CURVE: ${businessCycle.yieldCurveSignal||"—"}`} color={businessCycle.yieldCurveSignal==="STEEPENING"?"#22d3a8":businessCycle.yieldCurveSignal==="INVERTED"?"#f87171":"#f59e0b"} small/>
-            {businessCycle.ismPMI&&<Badge label={`PMI: ${businessCycle.ismPMI}`} color={parseFloat(businessCycle.ismPMI)>50?"#22d3a8":"#f87171"} small/>}
-          </div>
-          {businessCycle.ismNewOrdersInventoriesDiff&&<div style={{fontSize:10,color:"#475569",marginBottom:4}}>New Orders − Inventories: <span style={{color:parseFloat(businessCycle.ismNewOrdersInventoriesDiff)>0?"#22d3a8":"#f87171",fontFamily:"monospace",fontWeight:700}}>{businessCycle.ismNewOrdersInventoriesDiff}</span></div>}
-          {businessCycle.cycleNarrative&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>{businessCycle.cycleNarrative}</div>}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// ─── CREDIT & LIQUIDITY PANEL ─────────────────────────────────────────────────
-function CreditLiquidityPanel({cl}) {
-  if(!cl) return null;
-  const hyN = parseInt(cl.hyOAS)||0;
-  const hyC = hyN>700?"#f87171":hyN>500?"#f97316":hyN>450?"#f59e0b":hyN>300?"#94a3b8":"#22d3a8";
-  return (
-    <Card>
-      <CardTitle>Layer 3 — Credit & Liquidity</CardTitle>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-        {[
-          {label:"HY OAS",value:cl.hyOAS,color:hyC,sub:cl.hyOASRegime},
-          {label:"IG OAS",value:cl.igOAS,color:"#94a3b8"},
-          {label:"NFCI",value:cl.nfci,color:parseFloat(cl.nfci)>0?"#f59e0b":"#22d3a8",sub:cl.nfciRegime},
-          {label:"MOVE Index",value:cl.moveIndex,color:parseInt(cl.moveIndex)>150?"#f87171":"#94a3b8"},
-        ].map(({label,value,color,sub})=>(
-          <div key={label} style={{background:"#0a1628",borderRadius:5,padding:"8px 10px"}}>
-            <div style={{fontSize:9,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace",textTransform:"uppercase",marginBottom:2}}>{label}</div>
-            <div style={{fontSize:14,fontWeight:700,color:color||"#e2e8f0",fontFamily:"monospace"}}>{value||"—"}</div>
-            {sub&&<div style={{fontSize:9,color:color,fontFamily:"monospace",marginTop:1}}>{sub}</div>}
-          </div>
-        ))}
-      </div>
-      {/* HY OAS threshold bar */}
-      <div style={{marginBottom:8}}>
-        <div style={{fontSize:9,color:"#334155",fontFamily:"monospace",marginBottom:4}}>HY OAS REGIME THRESHOLDS</div>
-        <div style={{display:"flex",height:6,borderRadius:3,overflow:"hidden",gap:1}}>
-          {[{label:"TIGHT",w:20,c:"#22d3a8"},{label:"NORMAL",w:30,c:"#4ade80"},{label:"ELEV",w:15,c:"#f59e0b"},{label:"STRESS",w:20,c:"#f97316"},{label:"CRISIS",w:15,c:"#f87171"}].map(({label,w,c})=>(
-            <div key={label} style={{flex:w,background:c,opacity:cl.hyOASRegime===label.split(" ")[0]||cl.hyOASRegime===label?1:0.25,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:6,color:"#020b14",fontFamily:"monospace",fontWeight:700}}>{label}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
-          {["<300","450","500","700","700+"].map(v=><span key={v} style={{fontSize:8,color:"#1e3a5f",fontFamily:"monospace"}}>{v}</span>)}
-        </div>
-      </div>
-      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-        <Badge label={`CREDIT SIGNAL: ${cl.creditSignal||"—"}`} color={REGIME_COLORS[cl.creditSignal]||"#94a3b8"} small/>
-        <Badge label={`VIX: ${cl.vixTermStructure||"—"}`} color={cl.vixTermStructure==="BACKWARDATION"?"#f87171":"#22d3a8"} small/>
-      </div>
-      {cl.liquidityNarrative&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5,fontStyle:"italic"}}>{cl.liquidityNarrative}</div>}
-    </Card>
-  );
-}
-
-// ─── REC CARD (enhanced) ─────────────────────────────────────────────────────
-function RecCard({rec, primary}) {
-  if(!rec) return null;
-  const cc=CONF_COLORS[rec.conviction]||"#94a3b8";
-  return (
-    <div style={{background:primary?"#08142a":"#060f1a",border:`1px solid ${primary?"#1a3566":"#0f2037"}`,borderRadius:8,padding:18,position:"relative",overflow:"hidden"}}>
-      {primary&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#1d4ed8,#22d3a8)"}}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+    <div style={{background:primary?"var(--bg2)":"var(--bg3)",border:`1px solid ${primary?"var(--gold-dim)":"var(--border)"}`,
+      borderRadius:8,padding:20,position:"relative",overflow:"hidden"}}>
+      {primary && <div style={{position:"absolute",top:0,left:0,right:0,height:2,
+        background:"linear-gradient(90deg,var(--gold),var(--gold2))"}}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
-          <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"monospace",marginBottom:4}}>{primary?"PRIMARY OVERWEIGHT":"SECONDARY OVERWEIGHT"}</div>
-          <div style={{fontSize:20,fontWeight:800,color:"#f1f5f9",letterSpacing:"-0.02em"}}>{rec.name}</div>
-          <div style={{fontSize:12,color:"#475569",fontFamily:"monospace"}}>{rec.ticker}</div>
+          <div style={{fontSize:9,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:6}}>
+            {primary ? "PRIMARY OVERWEIGHT" : "SECONDARY OVERWEIGHT"}
+          </div>
+          <div style={{fontSize:22,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",
+            letterSpacing:"-0.02em",lineHeight:1}}>{rec.name}</div>
+          <div style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:3}}>{rec.ticker}</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-          <ScoreMeter score={rec.compositeScore} size={38}/>
-          <Badge label={`${rec.conviction} CONV`} color={cc} small/>
+        <ScoreMeter score={rec.compositeScore} size={42}/>
+      </div>
+      <div style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-body)",lineHeight:1.7,marginBottom:12}}>
+        {rec.thesis}
+      </div>
+      {rec.catalysts?.length>0 && (
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:8,color:"var(--green)",fontFamily:"var(--font-data)",marginBottom:4}}>▲ CATALYSTS</div>
+          {rec.catalysts.map((c,i)=><div key={i} style={{fontSize:10,color:"var(--text3)",marginBottom:2}}>· {c}</div>)}
         </div>
+      )}
+      {rec.keyRisks?.length>0 && (
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:4}}>▼ KEY RISKS</div>
+          {rec.keyRisks.map((r,i)=><div key={i} style={{fontSize:10,color:"var(--text3)",marginBottom:2}}>· {r}</div>)}
+        </div>
+      )}
+      <div style={{background:"var(--bg)",borderRadius:5,padding:"9px 12px",
+        borderLeft:`2px solid ${convC}`,fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
+        <span style={{color:convC,fontFamily:"var(--font-data)",fontWeight:500}}>ENTRY: </span>{rec.entryRationale}
       </div>
-      <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,marginBottom:10}}>{rec.thesis}</div>
-      {/* Catalysts */}
-      {rec.catalysts?.length>0&&<div style={{marginBottom:8}}>
-        <div style={{fontSize:9,color:"#22d3a8",fontFamily:"monospace",marginBottom:4}}>▲ CATALYSTS</div>
-        {rec.catalysts.map((c,i)=><div key={i} style={{fontSize:10,color:"#64748b",marginBottom:2}}>• {c}</div>)}
-      </div>}
-      {/* Risks */}
-      {rec.keyRisks?.length>0&&<div style={{marginBottom:10}}>
-        <div style={{fontSize:9,color:"#f87171",fontFamily:"monospace",marginBottom:4}}>▼ KEY RISKS</div>
-        {rec.keyRisks.map((r,i)=><div key={i} style={{fontSize:10,color:"#64748b",marginBottom:2}}>• {r}</div>)}
-      </div>}
-      <div style={{background:"#0a1628",borderRadius:4,padding:"7px 12px",fontSize:11,color:"#64748b",borderLeft:`2px solid ${cc}`}}>
-        <span style={{color:cc,fontWeight:700}}>ENTRY: </span>{rec.entryRationale}
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
-        <Badge label={`HORIZON: ${rec.timeHorizon}`} color="#1d4ed8" small/>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:10,alignItems:"center"}}>
+        <span style={{fontSize:9,color:convC,fontFamily:"var(--font-data)"}}>{rec.conviction} CONVICTION</span>
+        <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{rec.timeHorizon}</span>
       </div>
     </div>
   );
 }
 
-// ─── NEWS + EVENTS ────────────────────────────────────────────────────────────
-function NewsItem({item}) {
-  const c=item.sentiment==="BULLISH"?"#22d3a8":item.sentiment==="BEARISH"?"#f87171":"#94a3b8";
-  const mr=item.macroRelevance;
+// ─── NEWS ITEM ────────────────────────────────────────────────────────────────
+function NewsItem({ item }) {
+  const c = item.sentiment==="BULLISH"?"var(--green)":item.sentiment==="BEARISH"?"var(--red)":"var(--platinum)";
   return (
-    <div style={{padding:"9px 0",borderBottom:"1px solid #0d1a29",display:"flex",gap:10}}>
-      <div style={{width:3,background:c,borderRadius:2,flexShrink:0}}/>
+    <div style={{padding:"10px 0",borderBottom:"1px solid var(--border)",display:"flex",gap:12}}>
+      <div style={{width:2,background:c,borderRadius:1,flexShrink:0}}/>
       <div style={{flex:1}}>
-        <div style={{fontSize:12,color:"#e2e8f0",lineHeight:1.5,marginBottom:3}}>{item.headline}</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          <span style={{fontSize:10,color:"#475569"}}>{item.source}</span>
-          {item.sectorImpact?.slice(0,3).map(t=><span key={t} style={{fontSize:9,color:"#334155",fontFamily:"monospace",background:"#0a1628",borderRadius:2,padding:"0 4px"}}>{t}</span>)}
-          <span style={{fontSize:9,color:c,fontFamily:"monospace",fontWeight:700}}>{item.sentiment}</span>
-          {mr==="HIGH"&&<span style={{fontSize:9,color:"#f59e0b",fontFamily:"monospace"}}>MACRO-HIGH</span>}
+        <div style={{fontSize:12,color:"var(--text)",fontFamily:"var(--font-body)",lineHeight:1.55,marginBottom:4}}>
+          {item.headline}
         </div>
-        {item.impact&&<div style={{fontSize:11,color:"#64748b",marginTop:2,lineHeight:1.4}}>{item.impact}</div>}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:9,color:"var(--text3)"}}>{item.source}</span>
+          {item.sectorImpact?.slice(0,3).map(t=>(
+            <span key={t} style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",
+              background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:2,padding:"0 4px"}}>{t}</span>
+          ))}
+          <span style={{fontSize:9,color:c,fontFamily:"var(--font-data)",fontWeight:500}}>{item.sentiment}</span>
+          {item.macroRelevance==="HIGH" && <span style={{fontSize:8,color:"var(--amber)",fontFamily:"var(--font-data)"}}>MACRO</span>}
+        </div>
+        {item.impact && <div style={{fontSize:10,color:"var(--text3)",marginTop:4,lineHeight:1.45,fontFamily:"var(--font-body)"}}>{item.impact}</div>}
       </div>
     </div>
   );
 }
-function EventItem({item}) {
-  const ic={HIGH:"#f87171",MEDIUM:"#f59e0b",LOW:"#22d3a8"}[item.impact]||"#94a3b8";
-  const surpriseC=item.surprise==="BEAT"?"#22d3a8":item.surprise==="MISS"?"#f87171":"#94a3b8";
+
+// ─── EVENT ITEM ───────────────────────────────────────────────────────────────
+function EventItem({ item }) {
+  const ic = {HIGH:"var(--red)",MEDIUM:"var(--amber)",LOW:"var(--green)"}[item.impact]||"var(--text3)";
+  const sc = item.surprise==="BEAT"?"var(--green)":item.surprise==="MISS"?"var(--red)":"var(--platinum)";
   return (
-    <div style={{padding:"8px 0",borderBottom:"1px solid #0d1a29",display:"flex",gap:10}}>
-      <div style={{width:8,height:8,borderRadius:"50%",background:ic,marginTop:4,flexShrink:0,boxShadow:`0 0 5px ${ic}80`}}/>
+    <div style={{padding:"9px 0",borderBottom:"1px solid var(--border)",display:"flex",gap:10}}>
+      <div style={{width:7,height:7,borderRadius:"50%",background:ic,marginTop:4,flexShrink:0,boxShadow:`0 0 4px ${ic}`}}/>
       <div style={{flex:1}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <div style={{fontSize:12,color:"#e2e8f0",fontWeight:500}}>{item.event}</div>
-          <div style={{display:"flex",gap:4,alignItems:"center"}}>
-            {item.surprise&&<span style={{fontSize:9,color:surpriseC,fontFamily:"monospace",fontWeight:700}}>{item.surprise}</span>}
-            <span style={{fontSize:10,color:"#475569",fontFamily:"monospace"}}>{item.date}</span>
+          <div style={{fontSize:11,color:"var(--text)",fontFamily:"var(--font-body)",fontWeight:400}}>{item.event}</div>
+          <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
+            {item.surprise && <span style={{fontSize:8,color:sc,fontFamily:"var(--font-data)",fontWeight:500}}>{item.surprise}</span>}
+            <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{item.date}</span>
           </div>
         </div>
-        {(item.actual||item.expected||item.prior)&&<div style={{fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginTop:2}}>
-          {item.actual&&`A: ${item.actual}`}{item.expected&&` · E: ${item.expected}`}{item.prior&&` · P: ${item.prior}`}
-        </div>}
-        {item.marketImplication&&<div style={{fontSize:11,color:"#64748b",marginTop:2,lineHeight:1.4}}>{item.marketImplication}</div>}
+        {(item.actual||item.expected) && (
+          <div style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",marginTop:2}}>
+            {item.actual&&`A: ${item.actual}`}{item.expected&&` · E: ${item.expected}`}{item.prior&&` · P: ${item.prior}`}
+          </div>
+        )}
+        {item.marketImplication && <div style={{fontSize:10,color:"var(--text3)",marginTop:3,lineHeight:1.4,fontFamily:"var(--font-body)"}}>{item.marketImplication}</div>}
       </div>
     </div>
   );
 }
 
-// ─── TREND CHART ──────────────────────────────────────────────────────────────
-function TrendChart({reports}) {
-  const last8=[...reports].slice(-8);
+// ─── MACRO SPARKLINE ─────────────────────────────────────────────────────────
+function MacroSparkline({ reports, field, label, color="var(--green)" }) {
+  if (reports.length < 2) return null;
+  const vals = reports.map(r => parseFloat((r.macroIndicators?.[field]||"0").replace(/[^0-9.\-]/g,""))).filter(v=>!isNaN(v));
+  if (vals.length < 2) return null;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 0.01;
+  const W=60, H=20;
+  const pts = vals.map((v,i) => `${(i/(vals.length-1))*W},${H-((v-min)/range)*H}`).join(" ");
+  const last = vals[vals.length-1];
+  const prev = vals[vals.length-2];
+  const trend = last > prev ? "↑" : last < prev ? "↓" : "→";
+  const tC = last > prev ? "var(--green)" : last < prev ? "var(--red)" : "var(--platinum)";
   return (
-    <div>
-      <div style={{fontSize:9,color:"#334155",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"monospace",marginBottom:10}}>SECTOR ROTATION HISTORY ({last8.length} REPORTS)</div>
-      <div style={{display:"flex",gap:5}}>
-        {last8.map((rp,i)=>{
-          const q=rp.macroRegime?.quadrant||rp.marketRegime;
-          const c=REGIME_COLORS[q]||"#94a3b8";
-          const ts=rp.tailRisk?.compositeScore||0;
-          const tc=TAIL_COLORS[rp.tailRisk?.regime]||"#64748b";
-          return (
-            <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-              <div style={{width:"100%",height:46,background:c+"18",border:`1px solid ${c}30`,borderRadius:5,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1}}>
-                <span style={{fontSize:11,color:c,fontFamily:"monospace",fontWeight:700}}>{rp.recommendation?.primarySector?.ticker||"—"}</span>
-                <span style={{fontSize:8,color:c+"80",fontFamily:"monospace"}}>{rp.recommendation?.secondarySector?.ticker||""}</span>
-              </div>
-              {/* tail risk mini */}
-              <div style={{width:"100%",height:3,background:"#0a1628",borderRadius:1,overflow:"hidden"}}>
-                <div style={{width:ts+"%",height:"100%",background:tc,borderRadius:1}}/>
-              </div>
-              <div style={{width:6,height:6,borderRadius:"50%",background:c}}/>
-              <div style={{fontSize:8,color:"#334155",fontFamily:"monospace"}}>
-                {new Date(rp.reportDate+"T12:00:00Z").toLocaleDateString("en-US",{month:"numeric",day:"numeric"})}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-        <span style={{fontSize:8,color:"#1e3a5f",fontFamily:"monospace"}}>← OLDER</span>
-        <span style={{fontSize:8,color:"#1e3a5f",fontFamily:"monospace"}}>LATEST →</span>
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <svg width={W} height={H} style={{flexShrink:0}}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" opacity="0.7"/>
+        <circle cx={(vals.length-1)/(vals.length-1)*W} cy={H-((last-min)/range)*H} r="2" fill={color}/>
+      </svg>
+      <div>
+        <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{label}</div>
+        <div style={{fontSize:10,color:tC,fontFamily:"var(--font-data)"}}>{trend} {last.toFixed(2)}</div>
       </div>
     </div>
   );
@@ -790,61 +888,39 @@ export default function App() {
 
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
-    const STEPS=["🔍 L1: Scanning macro regime (Bridgewater quadrant)…","📊 L2: Mapping business cycle (Investment Clock)…","💳 L3: Assessing credit & liquidity conditions…","📈 L4: Scoring 11 sectors on 6 factors (AQR/BlackRock)…","🕯 L5: Running technical momentum overlays…","🛡 L6: Computing tail risk & black swan indicators…","⚖️ Applying composite scoring & dampener…","💼 Generating institutional sector recommendation…"];
+    const STEPS=["L1 · Scanning macro regime…","L2 · Mapping business cycle…","L3 · Credit & liquidity scan…","L4 · Factor scoring 11 sectors…","L5 · Technical overlays…","L6 · Tail risk computation…","Composite scoring…","Generating recommendation…"];
     let si=0; setLoadingStep(STEPS[0]);
     const timer=setInterval(()=>{ si++; if(si<STEPS.length) setLoadingStep(STEPS[si]); },2500);
     try {
       const res=await fetch("/api/analyze",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        credentials:"same-origin",
+        method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin",
         body:JSON.stringify({
-          model:"claude-sonnet-4-5",
-          max_tokens:6000,
-          system:buildSystemPrompt(),
+          model:"claude-sonnet-4-5", max_tokens:6000, system:buildSystemPrompt(),
           tools:[{type:"web_search_20250305",name:"web_search"}],
-          messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively to retrieve all current data for every layer. Score all 11 S&P 500 sector ETFs individually. Output ONLY the JSON report object — no text before or after.`}]
+          messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively. Score all 11 S&P 500 sector ETFs. Output ONLY the JSON report object.`}]
         })
       });
-
       if(res.status===401){ clearInterval(timer); window.location.href="/login"; return; }
       if(!res.ok){
-        const errData=await res.json().catch(()=>({}));
-        throw new Error(errData.error?.message||errData.error||`Server error ${res.status}`);
+        const e=await res.json().catch(()=>({}));
+        throw new Error(e.error?.message||e.error||`Server error ${res.status}`);
       }
-
-      // Parse Anthropic SSE stream — collect all text_delta events + message_stop
-      clearInterval(timer); setLoadingStep("📡 Receiving analysis stream…");
-      const reader=res.body.getReader();
-      const decoder=new TextDecoder();
-      let fullText="";
-      let buffer="";
-
+      clearInterval(timer); setLoadingStep("Receiving analysis stream…");
+      const reader=res.body.getReader(); const dec=new TextDecoder();
+      let fullText="", buf="";
       while(true){
-        const {done,value}=await reader.read();
-        if(done) break;
-        buffer+=decoder.decode(value,{stream:true});
-        // Process complete SSE lines
-        const lines=buffer.split("\n");
-        buffer=lines.pop()||""; // keep incomplete last line
+        const {done,value}=await reader.read(); if(done) break;
+        buf+=dec.decode(value,{stream:true});
+        const lines=buf.split("\n"); buf=lines.pop()||"";
         for(const line of lines){
           if(!line.startsWith("data: ")) continue;
-          const data=line.slice(6).trim();
-          if(data==="[DONE]") break;
-          try{
+          const data=line.slice(6).trim(); if(data==="[DONE]") break;
+          try {
             const evt=JSON.parse(data);
-            // Accumulate text deltas
-            if(evt.type==="content_block_delta"&&evt.delta?.type==="text_delta"){
-              fullText+=evt.delta.text||"";
-            }
-            // On message_stop, use accumulated content
-            if(evt.type==="message_delta"&&evt.usage) {
-              setLoadingStep("✅ Processing institutional report…");
-            }
+            if(evt.type==="content_block_delta"&&evt.delta?.type==="text_delta") fullText+=evt.delta.text||"";
           }catch(_){}
         }
       }
-
       if(!fullText) throw new Error("No content received from analysis stream");
       const report=parseReport(fullText);
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
@@ -858,208 +934,336 @@ export default function App() {
   const displayReport=selectedDate?reports.find(r=>r.reportDate===selectedDate):currentReport;
   const clearHistory=()=>{ if(window.confirm("Clear all saved reports?")){ saveReports([]); setCurrentReport(null); setSelectedDate(null); }};
 
-  // ── LOADING SCREEN ─────────────────────────────────────────────────────────
+  // ── LOADING SCREEN ──────────────────────────────────────────────────────────
   if(loading) return (
-    <div style={{minHeight:"100vh",background:"#020b14",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{width:52,height:52,border:"2px solid #0f2037",borderTop:"2px solid #1d4ed8",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:28}}>
+      <BBLogo size={52}/>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:13,color:"#e2e8f0",fontFamily:"monospace",fontWeight:700,letterSpacing:"0.06em",marginBottom:8}}>RUNNING 6-LAYER INSTITUTIONAL ANALYSIS</div>
-        <div style={{fontSize:12,color:"#22d3a8",fontFamily:"monospace"}}>{loadingStep}</div>
+        <div style={{fontSize:13,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text)",marginBottom:8}}>
+          Running Institutional Analysis
+        </div>
+        <div style={{fontSize:11,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{loadingStep}</div>
       </div>
-      <div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:"14px 24px",minWidth:360}}>
-        {["L1: Macro Regime Detection","L2: Business Cycle Mapping","L3: Credit & Liquidity Scan","L4: Fundamental Factor Scoring","L5: Technical Momentum Overlays","L6: Tail Risk & Black Swan"].map((s,i)=>(
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"16px 28px",minWidth:320}}>
+        {["L1: Macro Regime","L2: Business Cycle","L3: Credit & Liquidity","L4: Factor Scoring","L5: Technical Overlays","L6: Tail Risk"].map((s,i)=>(
           <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:"#0f2037"}}/>
-            <div style={{fontSize:11,color:"#334155",fontFamily:"monospace"}}>{s}</div>
+            <div style={{width:6,height:6,borderRadius:"50%",background:"var(--border2)"}}/>
+            <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{s}</div>
           </div>
         ))}
       </div>
+      <div style={{width:240,height:1,background:"linear-gradient(90deg,transparent,var(--gold),transparent)",animation:"pulse 2s ease infinite"}}/>
     </div>
   );
 
-  const r=displayReport;
-  const m=r?.macroIndicators||{};
-  const rec=r?.recommendation||{};
+  const r   = displayReport;
+  const m   = r?.macroIndicators||{};
+  const rec = r?.recommendation||{};
 
-  // ── DASHBOARD ──────────────────────────────────────────────────────────────
-  const renderDashboard=()=>{
-    if(!r) return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:420,gap:14}}>
-        <div style={{fontSize:56,opacity:0.15,color:"#22d3a8"}}>◈</div>
-        <div style={{fontSize:13,color:"#1e3a5f",fontFamily:"monospace",textAlign:"center",lineHeight:1.8}}>NO REPORTS YET<br/><span style={{fontSize:11,color:"#0f2037"}}>Click ▶ RUN ANALYSIS for a full 6-layer institutional scan</span></div>
-      </div>
-    );
-
-    return (
-      <div>
-        {/* ── ROW 0: Date/Regime header */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{fontSize:22,fontStyle:"italic",color:"#e2e8f0"}}>{fmtDate(r.reportDate)}</div>
-            <RegimeBadge regime={r.macroRegime?.quadrant||r.marketRegime}/>
-            <span style={{fontSize:11,color:"#475569",fontFamily:"monospace"}}>{r.businessCycle?.phase?.replace(/_/g," ")||r.cyclePhase}</span>
-            {r.tailRisk&&<Badge label={`TAIL: ${r.tailRisk.regime} (${r.tailRisk.compositeScore})`} color={TAIL_COLORS[r.tailRisk.regime]||"#94a3b8"} small/>}
-          </div>
-          <div style={{fontSize:11,color:"#334155",fontFamily:"monospace"}}>{r.reportTime} · v{r.schemaVersion||"3.0"}</div>
-        </div>
-
-        {/* ── ROW 1: Macro strip */}
-        <div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:"10px 14px",marginBottom:14,overflowX:"auto"}}>
-          <div style={{display:"flex",gap:8,minWidth:"fit-content"}}>
-            <MacroTile label="S&P 500" value={m.spx} sub={m.spxChange} up={m.spxChange?.startsWith("+")}/>
-            <MacroTile label="VIX" value={m.vix} sub={m.moveIndex?"MOVE:"+m.moveIndex:null}/>
-            <MacroTile label="Fed Rate" value={m.fedFundsRate}/>
-            <MacroTile label="CPI" value={m.cpi} sub={m.corePCE?"PCE:"+m.corePCE:null}/>
-            <MacroTile label="Real Rate" value={m.realRate10Y}/>
-            <MacroTile label="10Y Yield" value={m.tenYearYield} sub={m.breakeven10Y?"BE:"+m.breakeven10Y:null}/>
-            <MacroTile label="10Y-2Y" value={m.yieldCurve10Y2Y} up={m.yieldCurve10Y2Y?.startsWith("+")}/>
-            <MacroTile label="DXY" value={m.dxy} sub={m.dxyTrend}/>
-            <MacroTile label="WTI Crude" value={m.wtiCrude}/>
-            <MacroTile label="Gold" value={m.goldPrice}/>
-            <MacroTile label="Cu/Au Ratio" value={m.copperGoldRatio}/>
-            <MacroTile label="Unemployment" value={m.unemployment}/>
-            <MacroTile label="GDP" value={m.gdpGrowth}/>
-          </div>
-        </div>
-
-        {/* ── ROW 2: Trend chart (if history) */}
-        {reports.length>=2&&<div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:14,marginBottom:14}}><TrendChart reports={reports}/></div>}
-
-        {/* ── ROW 3: Three-column layer overview: Macro Quadrant | Investment Clock | Credit/Liq */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:14}}>
-          <MacroQuadrant macroRegime={r.macroRegime}/>
-          <InvestmentClock businessCycle={r.businessCycle}/>
-          <CreditLiquidityPanel cl={r.creditLiquidity}/>
-        </div>
-
-        {/* ── ROW 4: Strategist note */}
-        {rec.strategistNote&&<div style={{background:"#060f1a",border:"1px solid #0f2037",borderLeft:"3px solid #1d4ed8",borderRadius:8,padding:"13px 18px",marginBottom:14}}>
-          <div style={{fontSize:9,color:"#1e3a5f",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"monospace",marginBottom:6}}>Chief Strategist Note</div>
-          <div style={{fontSize:14,color:"#94a3b8",lineHeight:1.7,fontStyle:"italic"}}>"{rec.strategistNote}"</div>
-          <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
-            <Badge label={`RISK: ${rec.overallRiskLevel||"—"}`} color={CONF_COLORS[rec.overallRiskLevel]||"#94a3b8"} small/>
-            {rec.defensivePivot&&<Badge label="⚠ DEFENSIVE PIVOT ACTIVE" color="#f87171" small/>}
-            {rec.tailRiskAdjustment&&<span style={{fontSize:10,color:"#475569"}}>{rec.tailRiskAdjustment}</span>}
-          </div>
-        </div>}
-
-        {/* ── ROW 5: Rec cards + Sector board + Sector detail */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 220px 220px",gap:14,marginBottom:14}}>
-          <RecCard rec={rec.primarySector} primary={true}/>
-          <RecCard rec={rec.secondarySector} primary={false}/>
-          {/* Sector board */}
-          <div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:14}}>
-            <CardTitle>Sector Signals</CardTitle>
-            {(r.sectorAnalysis||[]).map((s,i)=>(
-              <SectorRow key={i} s={s} onSelect={setSelectedSector} selected={selectedSector?.ticker===s.ticker}/>
-            ))}
-            {rec.avoidSectors?.length>0&&<div style={{marginTop:8,borderTop:"1px solid #0d1a29",paddingTop:8}}>
-              <div style={{fontSize:9,color:"#7f1d1d",fontFamily:"monospace",marginBottom:5}}>AVOID</div>
-              {rec.avoidSectors.map((av,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
-                  <span style={{fontSize:10,color:"#f87171",fontFamily:"monospace",fontWeight:700}}>{av.ticker||av}</span>
-                  {av.reason&&<span style={{fontSize:9,color:"#7f1d1d",flex:1,marginLeft:8,lineHeight:1.3}}>{av.reason}</span>}
-                </div>
-              ))}
-            </div>}
-          </div>
-          {/* Sector detail */}
-          <div style={{background:"#060f1a",border:"1px solid #0f2037",borderRadius:8,padding:14}}>
-            <CardTitle>Sector Detail</CardTitle>
-            <SectorDetailPanel s={selectedSector}/>
-          </div>
-        </div>
-
-        {/* ── ROW 6: Tail risk + News + Events */}
-        <div style={{display:"grid",gridTemplateColumns:"280px 1fr 1fr",gap:14}}>
-          <TailRiskPanel tailRisk={r.tailRisk}/>
-          <Card>
-            <CardTitle>News Flow</CardTitle>
-            {(r.topNews||[]).map((n,i)=><NewsItem key={i} item={n}/>)}
-          </Card>
-          <Card>
-            <CardTitle>Economic Calendar</CardTitle>
-            {(r.economicEvents||[]).map((e,i)=><EventItem key={i} item={e}/>)}
-          </Card>
-        </div>
-      </div>
-    );
-  };
-
-  // ── ARCHIVE ────────────────────────────────────────────────────────────────
+  // ── ARCHIVE TAB ─────────────────────────────────────────────────────────────
   const renderArchive=()=>(
     <div>
-      <Card style={{marginBottom:14}}>
-        <CardTitle>Report Archive</CardTitle>
+      <Card style={{marginBottom:16}}>
+        <SectionLabel>Report Archive</SectionLabel>
         {reports.length===0
-          ? <div style={{color:"#1e3a5f",fontSize:12,fontFamily:"monospace",padding:"24px 0",textAlign:"center"}}>NO REPORTS SAVED YET</div>
+          ? <div style={{color:"var(--text3)",fontSize:11,fontFamily:"var(--font-data)",padding:"24px 0",textAlign:"center"}}>
+              No reports saved yet
+            </div>
           : [...reports].reverse().map((rp,i)=>{
-              const cc=CONF_COLORS[rp.recommendation?.primarySector?.conviction]||"#94a3b8";
-              const active=selectedDate===rp.reportDate;
-              const tailC=TAIL_COLORS[rp.tailRisk?.regime]||"#64748b";
-              return <div key={i} onClick={()=>{setSelectedDate(rp.reportDate);setTab("dashboard");}} style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",borderRadius:6,cursor:"pointer",marginBottom:4,background:active?"#0a1628":"transparent",border:`1px solid ${active?"#1e3a5f":"transparent"}`,transition:"all 0.15s"}}>
-                <div style={{fontSize:12,color:"#e2e8f0",fontFamily:"monospace",width:115}}>{fmtDate(rp.reportDate)}</div>
-                <RegimeBadge regime={rp.macroRegime?.quadrant||rp.marketRegime}/>
-                <div style={{fontSize:11,color:"#475569",flex:1}}>{rp.businessCycle?.phase?.replace(/_/g," ")||rp.cyclePhase}</div>
-                {rp.tailRisk&&<Badge label={`TAIL: ${rp.tailRisk.compositeScore}`} color={tailC} small/>}
-                {rp.recommendation?.primarySector&&<div style={{fontSize:11,color:cc,fontFamily:"monospace",fontWeight:700}}>↑ {rp.recommendation.primarySector.ticker}</div>}
-                {rp.recommendation?.secondarySector&&<div style={{fontSize:11,color:"#334155",fontFamily:"monospace"}}>+ {rp.recommendation.secondarySector.ticker}</div>}
-                <div style={{fontSize:11,color:"#1e3a5f"}}>→</div>
-              </div>;
+              const tailC = TAIL_COLORS[rp.tailRisk?.regime]||"var(--text3)";
+              const active = selectedDate===rp.reportDate;
+              return (
+                <div key={i} onClick={()=>{setSelectedDate(rp.reportDate);setTab("dashboard");}}
+                  style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",borderRadius:6,
+                    cursor:"pointer",marginBottom:4,background:active?"var(--bg3)":"transparent",
+                    border:`1px solid ${active?"var(--gold-dim)":"transparent"}`,transition:"all 0.15s"}}>
+                  <div style={{fontSize:11,color:"var(--text)",fontFamily:"var(--font-display)",width:110,fontStyle:"italic"}}>
+                    {fmtDate(rp.reportDate)}
+                  </div>
+                  <RegimeBadge regime={rp.macroRegime?.quadrant||rp.marketRegime} size="sm"/>
+                  <div style={{fontSize:10,color:"var(--text3)",flex:1,fontFamily:"var(--font-body)"}}>
+                    {rp.businessCycle?.phase?.replace(/_/g," ")||rp.cyclePhase}
+                  </div>
+                  {rp.tailRisk&&<span style={{fontSize:9,color:tailC,fontFamily:"var(--font-data)",
+                    background:tailC+"15",border:`1px solid ${tailC}30`,borderRadius:3,padding:"1px 7px"}}>
+                    TAIL {rp.tailRisk.compositeScore}</span>}
+                  {rp.recommendation?.primarySector&&<div style={{fontSize:10,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:500}}>
+                    ↑ {rp.recommendation.primarySector.ticker}</div>}
+                  <div style={{fontSize:10,color:"var(--border2)"}}>›</div>
+                </div>
+              );
             })
         }
       </Card>
       {reports.length>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontSize:11,color:"#1e3a5f",fontFamily:"monospace"}}>{reports.length} REPORT{reports.length!==1?"S":""} STORED · v3 schema</div>
-        <button onClick={clearHistory} style={{background:"none",border:"1px solid #7f1d1d",color:"#f87171",borderRadius:4,padding:"5px 14px",fontSize:10,fontFamily:"monospace",cursor:"pointer",letterSpacing:"0.08em"}}>CLEAR ARCHIVE</button>
+        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{reports.length} report{reports.length!==1?"s":""} in archive</div>
+        <button onClick={clearHistory} style={{background:"none",border:"1px solid var(--red2)",color:"var(--red)",
+          borderRadius:4,padding:"5px 14px",fontSize:9,fontFamily:"var(--font-data)",cursor:"pointer",letterSpacing:"0.08em"}}>
+          CLEAR ARCHIVE
+        </button>
       </div>}
     </div>
   );
 
-  // ── FULL RENDER ────────────────────────────────────────────────────────────
-  return (
-    <div style={{background:"#020b14",minHeight:"100vh",color:"#e2e8f0"}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} *{box-sizing:border-box} ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:2px}`}</style>
-      {/* HEADER */}
-      <div style={{borderBottom:"1px solid #0f2037",padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#020b14",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:32,height:32,background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>BB</div>
-          <div>
-            <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",letterSpacing:"0.06em",textTransform:"uppercase",fontFamily:"monospace"}}>BlackBridge Equity Research</div>
-            <div style={{fontSize:9,color:"#1e3a5f",letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"monospace"}}>Bridgewater · AQR · BlackRock · Goldman · 6-Layer Institutional Analysis</div>
+  // ── DASHBOARD ───────────────────────────────────────────────────────────────
+  const renderDashboard=()=>{
+    if(!r) return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:460,gap:20}}>
+        <BBLogo size={64}/>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:24,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text)",marginBottom:8}}>
+            BlackBridge Equity Research
+          </div>
+          <div style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-body)",marginBottom:4}}>
+            6-Layer Institutional Market Analysis
+          </div>
+          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
+            Bridgewater · AQR · BlackRock · Goldman Sachs · Fidelity
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{display:"flex",background:"#060f1a",border:"1px solid #0f2037",borderRadius:5,overflow:"hidden"}}>
-            {[["dashboard","Dashboard"],["archive","Archive"]].map(([id,label])=>(
-              <button key={id} onClick={()=>{setTab(id);if(id==="archive")setSelectedDate(null);}} style={{padding:"6px 16px",fontSize:11,fontFamily:"monospace",fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",border:"none",cursor:"pointer",background:tab===id?"#1d4ed8":"transparent",color:tab===id?"#fff":"#334155",transition:"all 0.15s"}}>{label}</button>
-            ))}
-          </div>
-          <a href="/api/logout" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:4,color:"#334155",padding:"5px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer",textDecoration:"none",display:"inline-block"}}>⚙ LOG OUT</a>
-          <button onClick={runAnalysis} style={{padding:"8px 18px",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",fontSize:11,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer"}}>▶ RUN ANALYSIS</button>
+        <div style={{width:160,height:1,background:"linear-gradient(90deg,transparent,var(--gold),transparent)"}}/>
+        <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
+          Click ▶ RUN ANALYSIS to begin
         </div>
       </div>
-      {/* STATUS */}
-      {(error||currentReport)&&<div style={{background:"#060f1a",borderBottom:"1px solid #0a1628",padding:"5px 24px",display:"flex",alignItems:"center",gap:14}}>
-        {error
-          ? <span style={{fontSize:11,color:"#f87171",fontFamily:"monospace"}}>⚠ {error}</span>
-          : <>
-              <span style={{width:6,height:6,borderRadius:"50%",background:"#22d3a8",display:"inline-block",boxShadow:"0 0 5px #22d3a8"}}/>
-              <span style={{fontSize:10,color:"#1e3a5f",fontFamily:"monospace",letterSpacing:"0.06em"}}>
-                LAST REPORT: {currentReport?`${fmtDate(currentReport.reportDate)} ${currentReport.reportTime||""}`:"—"}{reports.length>1?` · ${reports.length} REPORTS`:""}
-              </span>
-              {selectedDate&&<span style={{fontSize:10,color:"#f59e0b",fontFamily:"monospace"}}>
-                VIEWING: {fmtDate(selectedDate)} &nbsp;
-                <button onClick={()=>setSelectedDate(null)} style={{background:"none",border:"none",color:"#f59e0b",cursor:"pointer",fontSize:10,fontFamily:"monospace"}}>× LATEST</button>
-              </span>}
-            </>
-        }
-      </div>}
+    );
+
+    return (
+      <div style={{animation:"fadeUp 0.4s ease"}}>
+        {/* ── Header row */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{fontFamily:"var(--font-display)",fontStyle:"italic",fontSize:22,color:"var(--text)"}}>
+              {fmtDate(r.reportDate)}
+            </div>
+            <RegimeBadge regime={r.macroRegime?.quadrant||r.marketRegime}/>
+            <span style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
+              {r.businessCycle?.phase?.replace(/_/g," ")||r.cyclePhase}
+            </span>
+            {r.tailRisk && <span style={{fontSize:9,color:TAIL_COLORS[r.tailRisk.regime]||"var(--text3)",
+              fontFamily:"var(--font-data)",background:TAIL_COLORS[r.tailRisk.regime]+"18",
+              border:`1px solid ${TAIL_COLORS[r.tailRisk.regime]}30`,borderRadius:3,padding:"1px 8px"}}>
+              TAIL {r.tailRisk.compositeScore}
+            </span>}
+          </div>
+          <div style={{fontSize:10,color:"var(--text3)",fontFamily:"var(--font-data)"}}>{r.reportTime}</div>
+        </div>
+
+        {/* ── Macro strip */}
+        <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,
+          padding:"12px 16px",marginBottom:16,overflowX:"auto"}}>
+          <div style={{display:"flex",gap:8,minWidth:"fit-content"}}>
+            <MacroTile label="S&P 500"     value={m.spx}          sub={m.spxChange} trend={m.spxChange}/>
+            <MacroTile label="VIX"         value={m.vix}          sub={r.creditLiquidity?.vixTermStructure}/>
+            <MacroTile label="MOVE"        value={m.moveIndex}/>
+            <MacroTile label="Fed Rate"    value={m.fedFundsRate}/>
+            <MacroTile label="CPI"         value={m.cpi}          sub={m.corePCE?"PCE: "+m.corePCE:null}/>
+            <MacroTile label="Real Rate"   value={m.realRate10Y}/>
+            <MacroTile label="10Y Yield"   value={m.tenYearYield} sub={m.breakeven10Y?"BE: "+m.breakeven10Y:null}/>
+            <MacroTile label="10Y–2Y"      value={m.yieldCurve10Y2Y} trend={m.yieldCurve10Y2Y}/>
+            <MacroTile label="DXY"         value={m.dxy}          sub={m.dxyTrend} trend={m.dxyTrend}/>
+            <MacroTile label="WTI"         value={m.wtiCrude}/>
+            <MacroTile label="Gold"        value={m.goldPrice}/>
+            <MacroTile label="Cu/Au"       value={m.copperGoldRatio}/>
+            <MacroTile label="Unemployment" value={m.unemployment}/>
+            <MacroTile label="GDP"         value={m.gdpGrowth}/>
+          </div>
+        </div>
+
+        {/* ── Performance & Heatmap row */}
+        {reports.length >= 2 && (
+          <div style={{display:"grid",gridTemplateColumns:"3fr 2fr",gap:16,marginBottom:16}}>
+            <Card>
+              <SectionLabel>S&P 500 Daily Performance vs Primary Sector Score</SectionLabel>
+              <PerformanceChart reports={reports}/>
+            </Card>
+            <Card>
+              <SectionLabel>Sector Score Heatmap · {reports.length} Reports</SectionLabel>
+              <SectorHeatmap reports={reports}/>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Three-layer overview */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:16}}>
+          <Card>
+            <SectionLabel>L1 · Macro Regime</SectionLabel>
+            <MacroQuadrantWidget mr={r.macroRegime}/>
+          </Card>
+          <Card>
+            <SectionLabel>L2 · Business Cycle</SectionLabel>
+            <InvestmentClockWidget bc={r.businessCycle}/>
+          </Card>
+          <Card>
+            <SectionLabel>L3 · Credit & Liquidity</SectionLabel>
+            <CreditPanel cl={r.creditLiquidity}/>
+          </Card>
+        </div>
+
+        {/* ── Strategist note */}
+        {rec.strategistNote && (
+          <div style={{background:"var(--bg2)",border:"1px solid var(--gold-dim)",
+            borderLeft:"3px solid var(--gold)",borderRadius:8,padding:"14px 20px",marginBottom:16}}>
+            <div style={{fontSize:8,color:"var(--gold)",fontFamily:"var(--font-data)",letterSpacing:"0.14em",marginBottom:8}}>
+              CHIEF STRATEGIST NOTE
+            </div>
+            <div style={{fontSize:14,fontFamily:"var(--font-display)",fontStyle:"italic",color:"var(--text2)",lineHeight:1.7}}>
+              "{rec.strategistNote}"
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap",alignItems:"center"}}>
+              {rec.overallRiskLevel && <span style={{fontSize:9,
+                color:{HIGH:"var(--red)",MEDIUM:"var(--amber)",LOW:"var(--green)"}[rec.overallRiskLevel]||"var(--platinum)",
+                fontFamily:"var(--font-data)"}}>RISK LEVEL: {rec.overallRiskLevel}</span>}
+              {rec.defensivePivot && <span style={{fontSize:9,color:"var(--red)",fontFamily:"var(--font-data)",
+                background:"var(--bg3)",border:"1px solid var(--red2)",borderRadius:3,padding:"1px 7px"}}>⚠ DEFENSIVE PIVOT ACTIVE</span>}
+            </div>
+          </div>
+        )}
+
+        {/* ── Rec cards + sector board + sector detail */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 200px 200px",gap:16,marginBottom:16}}>
+          <RecCard rec={rec.primarySector} primary={true}/>
+          <RecCard rec={rec.secondarySector} primary={false}/>
+          {/* Sector board */}
+          <Card style={{padding:14}}>
+            <SectionLabel>Sector Signals</SectionLabel>
+            {(r.sectorAnalysis||[]).map((s,i)=>(
+              <SectorRow key={i} s={s} onSelect={setSelectedSector} selected={selectedSector?.ticker===s.ticker}/>
+            ))}
+            {rec.avoidSectors?.length>0 && (
+              <div style={{marginTop:10,borderTop:"1px solid var(--border)",paddingTop:8}}>
+                <div style={{fontSize:8,color:"var(--red)",fontFamily:"var(--font-data)",marginBottom:5}}>AVOID</div>
+                {rec.avoidSectors.map((av,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
+                    <span style={{fontSize:10,color:"var(--red)",fontFamily:"var(--font-data)",fontWeight:500}}>{av.ticker||av}</span>
+                    {av.reason && <span style={{fontSize:9,color:"var(--text3)",flex:1,marginLeft:8,lineHeight:1.3}}>{av.reason}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+          {/* Sector detail */}
+          <Card style={{padding:14}}>
+            <SectionLabel>Sector Detail</SectionLabel>
+            <SectorDetailPanel s={selectedSector}/>
+          </Card>
+        </div>
+
+        {/* ── Tail risk + News + Events */}
+        <div style={{display:"grid",gridTemplateColumns:"260px 1fr 1fr",gap:16,marginBottom:16}}>
+          <Card>
+            <SectionLabel>L6 · Tail Risk</SectionLabel>
+            <TailRiskWidget tailRisk={r.tailRisk}/>
+          </Card>
+          <Card>
+            <SectionLabel>News Flow</SectionLabel>
+            {(r.topNews||[]).map((n,i)=><NewsItem key={i} item={n}/>)}
+          </Card>
+          <Card>
+            <SectionLabel>Economic Calendar</SectionLabel>
+            {(r.economicEvents||[]).map((e,i)=><EventItem key={i} item={e}/>)}
+          </Card>
+        </div>
+
+        {/* ── Macro sparklines trend row */}
+        {reports.length >= 3 && (
+          <Card>
+            <SectionLabel>Macro Trend Sparklines · {reports.length} Reports</SectionLabel>
+            <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+              <MacroSparkline reports={reports} field="vix" label="VIX" color="var(--red)"/>
+              <MacroSparkline reports={reports} field="tenYearYield" label="10Y Yield" color="var(--amber)"/>
+              <MacroSparkline reports={reports} field="dxy" label="DXY" color="var(--platinum)"/>
+              <MacroSparkline reports={reports} field="wtiCrude" label="WTI Crude" color="var(--amber)"/>
+              <MacroSparkline reports={reports} field="unemployment" label="Unemployment" color="var(--blue)"/>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  // ── FULL RENDER ──────────────────────────────────────────────────────────────
+  return (
+    <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text)"}}>
+      <style>{BRAND}</style>
+
+      {/* HEADER */}
+      <div style={{borderBottom:"1px solid var(--border)",padding:"12px 28px",display:"flex",
+        alignItems:"center",justifyContent:"space-between",background:"var(--bg2)",
+        position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <BBLogo size={34}/>
+          <div>
+            <div style={{fontSize:14,fontFamily:"var(--font-display)",fontWeight:600,color:"var(--text)",letterSpacing:"0.02em"}}>
+              BlackBridge
+              <span style={{fontSize:11,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:400,
+                letterSpacing:"0.12em",marginLeft:8,verticalAlign:"middle"}}>EQUITY RESEARCH</span>
+            </div>
+            <div style={{fontSize:8,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.12em",
+              textTransform:"uppercase",marginTop:1}}>
+              Bridgewater · AQR · BlackRock · Goldman · 6-Layer Institutional Analysis
+            </div>
+          </div>
+        </div>
+        {/* Gold rule */}
+        <div style={{flex:1,height:1,background:"linear-gradient(90deg,var(--border),var(--gold-dim),var(--border))",margin:"0 24px"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:5,overflow:"hidden"}}>
+            {[["dashboard","Dashboard"],["archive","Archive"]].map(([id,label])=>(
+              <button key={id} onClick={()=>{setTab(id);if(id==="archive")setSelectedDate(null);}}
+                style={{padding:"6px 16px",fontSize:10,fontFamily:"var(--font-data)",fontWeight:500,
+                  letterSpacing:"0.08em",textTransform:"uppercase",border:"none",cursor:"pointer",
+                  background:tab===id?"var(--gold)":"transparent",
+                  color:tab===id?"var(--bg)":"var(--text3)",transition:"all 0.15s"}}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <a href="/api/logout" style={{background:"none",border:"1px solid var(--border)",borderRadius:4,
+            color:"var(--text3)",padding:"5px 12px",fontSize:9,fontFamily:"var(--font-data)",
+            cursor:"pointer",textDecoration:"none",letterSpacing:"0.08em",transition:"border-color 0.15s"}}>
+            LOG OUT
+          </a>
+          <button onClick={runAnalysis}
+            style={{padding:"8px 20px",background:"var(--gold)",border:"none",borderRadius:5,
+              color:"var(--bg)",fontSize:10,fontFamily:"var(--font-data)",fontWeight:700,
+              letterSpacing:"0.1em",cursor:"pointer",transition:"background 0.15s"}}>
+            ▶ RUN ANALYSIS
+          </button>
+        </div>
+      </div>
+
+      {/* STATUS BAR */}
+      {(error||currentReport) && (
+        <div style={{background:"var(--bg)",borderBottom:"1px solid var(--border)",
+          padding:"5px 28px",display:"flex",alignItems:"center",gap:16}}>
+          {error
+            ? <span style={{fontSize:10,color:"var(--red)",fontFamily:"var(--font-data)"}}>⚠ {error}</span>
+            : <>
+                <span style={{width:5,height:5,borderRadius:"50%",background:"var(--green)",
+                  display:"inline-block",boxShadow:"0 0 5px var(--green)"}}/>
+                <span style={{fontSize:9,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.06em"}}>
+                  LAST ANALYSIS: {currentReport?`${fmtDate(currentReport.reportDate)} ${currentReport.reportTime||""}`:"—"}
+                  {reports.length>1?` · ${reports.length} reports in archive`:""}
+                </span>
+                {selectedDate && (
+                  <span style={{fontSize:9,color:"var(--amber)",fontFamily:"var(--font-data)"}}>
+                    VIEWING: {fmtDate(selectedDate)} &nbsp;
+                    <button onClick={()=>setSelectedDate(null)} style={{background:"none",border:"none",
+                      color:"var(--amber)",cursor:"pointer",fontSize:9,fontFamily:"var(--font-data)"}}>
+                      × LATEST
+                    </button>
+                  </span>
+                )}
+              </>
+          }
+        </div>
+      )}
+
       {/* MAIN */}
-      <div style={{padding:"18px 24px",maxWidth:1600,margin:"0 auto"}}>
-        {tab==="dashboard"&&renderDashboard()}
-        {tab==="archive"&&renderArchive()}
+      <div style={{padding:"22px 28px",maxWidth:1600,margin:"0 auto"}}>
+        {tab==="dashboard" && renderDashboard()}
+        {tab==="archive"   && renderArchive()}
       </div>
     </div>
   );
