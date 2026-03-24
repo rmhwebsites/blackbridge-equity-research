@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const STORAGE_KEY   = "bb_market_reports_v3";
-const PASSWORD_STORE = "bb_dashboard_password";
 
 const REGIME_COLORS = {
   RISK_ON:"#22d3a8", RISK_OFF:"#f87171", TRANSITIONING:"#f59e0b", NEUTRAL:"#94a3b8",
@@ -769,67 +768,8 @@ function TrendChart({reports}) {
   );
 }
 
-// ─── PASSWORD GATE ────────────────────────────────────────────────────────────
-function PasswordGate({onSave}) {
-  const [val, setVal] = useState("");
-  const [err, setErr] = useState("");
-
-  const attempt = async () => {
-    if (!val.trim()) return;
-    // Quick pre-flight to verify password before saving
-    setErr("Verifying…");
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-dashboard-password": val.trim() },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
-      });
-      if (res.status === 401) { setErr("Incorrect password. Try again."); return; }
-      if (res.status === 500) { setErr("Server error — check Vercel environment variables."); return; }
-      // 400 / 200 both mean auth passed (400 = bad model param is fine, key worked)
-      onSave(val.trim());
-    } catch (_) {
-      // Network error — still save and let the analysis step surface the error
-      onSave(val.trim());
-    }
-  };
-
-  return (
-    <div style={{minHeight:"100vh",background:"#020b14",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:440,background:"#060f1a",border:"1px solid #0f2037",borderRadius:10,padding:36}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
-          <div style={{width:36,height:36,background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>BB</div>
-          <div>
-            <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",letterSpacing:"0.05em",fontFamily:"monospace"}}>BLACKBRIDGE RESEARCH</div>
-            <div style={{fontSize:10,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace"}}>6-LAYER INSTITUTIONAL MARKET ANALYSIS</div>
-          </div>
-        </div>
-        <p style={{fontSize:12,color:"#64748b",lineHeight:1.7,marginBottom:20}}>
-          Enter your dashboard password to access the institutional market analysis platform.
-        </p>
-        <div style={{fontSize:10,color:"#334155",letterSpacing:"0.1em",fontFamily:"monospace",marginBottom:8}}>DASHBOARD PASSWORD</div>
-        <input
-          type="password"
-          value={val}
-          onChange={e=>{setVal(e.target.value);setErr("");}}
-          onKeyDown={e=>e.key==="Enter"&&attempt()}
-          placeholder="Enter password…"
-          style={{width:"100%",background:"#0a1628",border:`1px solid ${err&&err!=="Verifying…"?"#f87171":"#1e3a5f"}`,borderRadius:5,padding:"10px 14px",color:"#e2e8f0",fontSize:13,fontFamily:"monospace",outline:"none",marginBottom:8,boxSizing:"border-box"}}
-        />
-        {err && <div style={{fontSize:11,color:err==="Verifying…"?"#f59e0b":"#f87171",fontFamily:"monospace",marginBottom:10}}>{err}</div>}
-        <button
-          onClick={attempt}
-          style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",padding:"10px",fontSize:12,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer",marginTop:err?0:10}}>
-          ENTER DASHBOARD →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [password,setPassword]=useState(()=>localStorage.getItem(PASSWORD_STORE)||"");
   const [reports,setReports]=useState([]);
   const [currentReport,setCurrentReport]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -847,9 +787,6 @@ export default function App() {
   },[]);
 
   const saveReports=(arr)=>{ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));}catch(_){} setReports(arr); };
-  const handleSavePassword=(p)=>{ localStorage.setItem(PASSWORD_STORE,p); setPassword(p); };
-
-  if(!password) return <PasswordGate onSave={handleSavePassword}/>;
 
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
@@ -859,10 +796,8 @@ export default function App() {
     try {
       const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-dashboard-password": password,
-        },
+        headers:{ "Content-Type":"application/json" },
+        credentials:"same-origin",
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:6000,
@@ -872,7 +807,7 @@ export default function App() {
         })
       });
       clearInterval(timer); setLoadingStep("✅ Processing institutional report…");
-      if(res.status===401){ setError("Incorrect password. Please log out and re-enter."); return; }
+      if(res.status===401){ window.location.href="/login"; return; }
       const data=await res.json();
       if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
       const texts=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
@@ -1067,7 +1002,7 @@ export default function App() {
               <button key={id} onClick={()=>{setTab(id);if(id==="archive")setSelectedDate(null);}} style={{padding:"6px 16px",fontSize:11,fontFamily:"monospace",fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",border:"none",cursor:"pointer",background:tab===id?"#1d4ed8":"transparent",color:tab===id?"#fff":"#334155",transition:"all 0.15s"}}>{label}</button>
             ))}
           </div>
-          <button onClick={()=>{setPassword("");localStorage.removeItem(PASSWORD_STORE);}} title="Log out" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:4,color:"#334155",padding:"5px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer"}}>⚙ LOG OUT</button>
+          <a href="/api/logout" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:4,color:"#334155",padding:"5px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer",textDecoration:"none",display:"inline-block"}}>⚙ LOG OUT</a>
           <button onClick={runAnalysis} style={{padding:"8px 18px",background:"linear-gradient(135deg,#1d4ed8,#0ea5e9)",border:"none",borderRadius:5,color:"#fff",fontSize:11,fontFamily:"monospace",fontWeight:700,letterSpacing:"0.08em",cursor:"pointer"}}>▶ RUN ANALYSIS</button>
         </div>
       </div>
