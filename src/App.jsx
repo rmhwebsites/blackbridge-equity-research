@@ -17,7 +17,7 @@ const SIGNAL_STYLE = {
 };
 
 // ─── MASTER SYSTEM PROMPT (6-Layer Institutional Framework) ───────────────────
-const SYSTEM_PROMPT = `You are the Chief Investment Strategist at a bulge bracket investment bank, leading an elite multi-disciplinary research team. You run a six-layer institutional top-down analysis cascading from global macro to specific S&P 500 sector recommendations using methodologies from Bridgewater, AQR, BlackRock, Goldman Sachs, Fidelity, and MSCI.
+const buildSystemPrompt = () => `You are the Chief Investment Strategist at a bulge bracket investment bank, leading an elite multi-disciplinary research team. You run a six-layer institutional top-down analysis cascading from global macro to specific S&P 500 sector recommendations using methodologies from Bridgewater, AQR, BlackRock, Goldman Sachs, Fidelity, and MSCI.
 
 TODAY: ${new Date().toISOString().split("T")[0]}
 
@@ -256,8 +256,6 @@ function fmtDate(d) {
   if (!d) return "—";
   return new Date(d+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 }
-function num(v,def="—") { return v!=null?v:def; }
-function pct(v) { if(v==null) return "—"; const n=parseFloat(v); return isNaN(n)? String(v):`${n>0?"+":""}${n.toFixed(1)}%`; }
 function scoreColor(s) {
   if(s==null) return "#64748b";
   if(s>=1.0) return "#22d3a8";
@@ -267,9 +265,10 @@ function scoreColor(s) {
   return "#f87171";
 }
 function scoreBar(s) {
+  if (s == null) return 50; // centre bar when no score
   // convert -2..+2 to 0..100%
-  const pct = ((s+2)/4)*100;
-  return Math.max(2, Math.min(98, pct));
+  const w = ((s+2)/4)*100;
+  return Math.max(2, Math.min(98, w));
 }
 
 // ─── MINI COMPONENTS ─────────────────────────────────────────────────────────
@@ -337,7 +336,7 @@ function LayerBar({label,score}) {
 }
 function ScoreMeter({score, size=36}) {
   const c = scoreColor(score);
-  const label = score>=1?"S.OW":score>=0.5?"OW":score>-0.5?"N":score>-1?"UW":"S.UW";
+  const label = score==null?"—":score>=1?"S.OW":score>=0.5?"OW":score>-0.5?"N":score>-1?"UW":"S.UW";
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
       <div style={{width:size,height:size,borderRadius:"50%",border:`2px solid ${c}`,display:"flex",alignItems:"center",justifyContent:"center",background:c+"15"}}>
@@ -522,7 +521,7 @@ function MacroQuadrant({macroRegime}) {
         {/* quadrant plot */}
         <div style={{position:"relative",width:120,height:120,flexShrink:0,border:"1px solid #0f2037",borderRadius:6,overflow:"hidden",background:"#030d18"}}>
           {/* quadrant shading */}
-          {[{x:0,y:0,label:"DEFL",c:"#94a3b820"},{x:50,y:0,label:"REFLAT",c:"#f59e0b18"},{x:0,y:50,label:"DEFLAT",c:"#64748b18"},{x:50,y:50,label:"GOLD",c:"#22d3a818"}].map(({x,y,label,c})=>(
+          {[{x:0,y:0,label:"GOLD",c:"#22d3a818"},{x:50,y:0,label:"REFLAT",c:"#f59e0b18"},{x:0,y:50,label:"DEFLAT",c:"#64748b18"},{x:50,y:50,label:"STAGFL",c:"#f8717118"}].map(({x,y,label,c})=>(
             <div key={label} style={{position:"absolute",left:x+"%",top:y+"%",width:"50%",height:"50%",background:c,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <span style={{fontSize:7,color:"#1e3a5f",fontFamily:"monospace"}}>{label}</span>
             </div>
@@ -558,12 +557,11 @@ function MacroQuadrant({macroRegime}) {
 function InvestmentClock({businessCycle}) {
   if(!businessCycle) return null;
   const pos   = businessCycle.clockPosition||9;
-  const angle = ((pos-3)/12)*360; // 3 o'clock = 0deg, 12 o'clock = 270deg
-  const rad   = (angle-90)*(Math.PI/180);
-  const cx=50,cy=50,r=35;
+  // Correct clock-hand math: pos=12→up, pos=3→right, pos=6→down, pos=9→left
+  const rad = (pos / 12) * 2 * Math.PI - Math.PI / 2;
+  const cx=50, cy=50, r=35;
   const hx = cx + r*Math.cos(rad);
   const hy = cy + r*Math.sin(rad);
-  const phases=[{label:"RECOVERY",pos:7.5},{label:"EXPANSION",pos:10.5},{label:"SLOWDOWN",pos:1.5},{label:"CONTRACTION",pos:4.5}];
   return (
     <Card>
       <CardTitle>Layer 2 — Business Cycle · Investment Clock</CardTitle>
@@ -573,7 +571,7 @@ function InvestmentClock({businessCycle}) {
             {/* Quadrant arcs */}
             {[{d:"M50,50 L50,10 A40,40 0 0,1 90,50 Z",c:"#22d3a818",l:"EARLY",lx:72,ly:28},
               {d:"M50,50 L90,50 A40,40 0 0,1 50,90 Z",c:"#f59e0b18",l:"LATE",lx:72,ly:72},
-              {d:"M50,50 L50,90 A40,40 0 0,1 10,50 Z",c:"#f87171 18",l:"RECESS",lx:16,ly:72},
+              {d:"M50,50 L50,90 A40,40 0 0,1 10,50 Z",c:"#f8717118",l:"RECESS",lx:16,ly:72},
               {d:"M50,50 L10,50 A40,40 0 0,1 50,10 Z",c:"#64748b18",l:"RECOV",lx:20,ly:28}
             ].map(({d,c,l,lx,ly})=>(
               <g key={l}><path d={d} fill={c}/><text x={lx} y={ly} textAnchor="middle" fill="#1e3a5f" fontSize="5" fontFamily="monospace">{l}</text></g>
@@ -655,7 +653,6 @@ function CreditLiquidityPanel({cl}) {
 function RecCard({rec, primary}) {
   if(!rec) return null;
   const cc=CONF_COLORS[rec.conviction]||"#94a3b8";
-  const sc=scoreColor(rec.compositeScore);
   return (
     <div style={{background:primary?"#08142a":"#060f1a",border:`1px solid ${primary?"#1a3566":"#0f2037"}`,borderRadius:8,padding:18,position:"relative",overflow:"hidden"}}>
       {primary&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#1d4ed8,#22d3a8)"}}/>}
@@ -839,7 +836,7 @@ export default function App() {
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:6000,
-          system:SYSTEM_PROMPT,
+          system:buildSystemPrompt(),
           tools:[{type:"web_search_20250305",name:"web_search"}],
           messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively to retrieve all current data for every layer. Score all 11 S&P 500 sector ETFs individually. Output ONLY the JSON report object — no text before or after.`}]
         })
