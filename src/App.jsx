@@ -770,6 +770,7 @@ function TrendChart({reports}) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [apiKey,setApiKey]=useState(null);
   const [reports,setReports]=useState([]);
   const [currentReport,setCurrentReport]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -780,10 +781,16 @@ export default function App() {
   const [selectedSector,setSelectedSector]=useState(null);
 
   useEffect(()=>{
+    // Load saved reports
     try {
       const s=localStorage.getItem(STORAGE_KEY);
       if(s){ const a=JSON.parse(s); setReports(a); if(a.length) setCurrentReport(a[a.length-1]); }
     } catch(_){}
+    // Fetch API key from secure server endpoint (only works with valid session cookie)
+    fetch("/api/key",{credentials:"same-origin"})
+      .then(r=>{ if(r.status===401){window.location.href="/login";} return r.json(); })
+      .then(d=>{ if(d.key) setApiKey(d.key); })
+      .catch(()=>{}); // will surface as error on analysis attempt
   },[]);
 
   const saveReports=(arr)=>{ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));}catch(_){} setReports(arr); };
@@ -794,10 +801,14 @@ export default function App() {
     let si=0; setLoadingStep(STEPS[0]);
     const timer=setInterval(()=>{ si++; if(si<STEPS.length) setLoadingStep(STEPS[si]); },2500);
     try {
-      const res=await fetch("/api/analyze",{
+      if(!apiKey) throw new Error("API key not loaded yet — please refresh the page.");
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        credentials:"same-origin",
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key": apiKey,
+          "anthropic-version":"2023-06-01",
+        },
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:6000,
@@ -807,21 +818,8 @@ export default function App() {
         })
       });
       clearInterval(timer); setLoadingStep("✅ Processing institutional report…");
-      if(res.status===401){ window.location.href="/login"; return; }
-
-      // Safe parse — Vercel may return HTML on timeout/gateway errors, not JSON
-      const rawText = await res.text();
-      let data;
-      try { data = JSON.parse(rawText); }
-      catch(_) {
-        // Vercel timed out or returned an HTML error page
-        if(res.status===504||res.status===502||res.status===524) {
-          throw new Error("Request timed out. The analysis takes 60–120s — upgrade to Vercel Pro (60s limit) or try again.");
-        }
-        throw new Error(`Server error (${res.status}): ${rawText.slice(0,120)}`);
-      }
-
-      if(!res.ok) throw new Error(data.error?.message||data.error||`API error ${res.status}`);
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
       const texts=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       if(!texts) throw new Error("No text content returned from API");
       const report=parseReport(texts);
