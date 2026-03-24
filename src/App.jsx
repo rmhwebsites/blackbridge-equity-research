@@ -907,26 +907,28 @@ function MacroSparkline({ reports, field, label, color="var(--green)" }) {
 
 // ─── ANALYSIS SCREEN ─────────────────────────────────────────────────────────
 const ANALYSIS_LAYERS = [
-  { id:"L1", label:"Macro Regime Detection",    sub:"Bridgewater Growth/Inflation Quadrant · AQR 5-Factor",  icon:"◈" },
-  { id:"L2", label:"Business Cycle Mapping",    sub:"Fidelity AART · Merrill Lynch Investment Clock",        icon:"◷" },
-  { id:"L3", label:"Credit & Liquidity Scan",   sub:"HY/IG OAS · Chicago Fed NFCI · VIX Structure",         icon:"◉" },
-  { id:"L4", label:"Fundamental Factor Scoring",sub:"Momentum · Value · Quality · ERB · Low-Vol · Carry",    icon:"◎" },
-  { id:"L5", label:"Technical Overlays",        sub:"RSI(14) · MACD · 200-DMA · Breadth · Rel. Strength",   icon:"◐" },
-  { id:"L6", label:"Tail Risk & Black Swan",    sub:"BIS Early Warning · Dalio Gauge · Soros Reflexivity",  icon:"◍" },
-  { id:"∑",  label:"Composite Scoring",         sub:"Strategic × Tactical · Tail Dampener",                  icon:"⊛" },
-  { id:"↑",  label:"Sector Recommendation",     sub:"Primary Overweight · Secondary · Avoid List",           icon:"◆" },
+  { id:"L1", label:"Macro Regime",         sub:"ISM PMI · CPI · Breakeven · DXY · AQR quadrant" },
+  { id:"L2", label:"Business Cycle",       sub:"Yield curve · New Orders-Inventory · CLI" },
+  { id:"L3", label:"Credit & Liquidity",   sub:"HY/IG OAS · Chicago Fed NFCI · VIX structure" },
+  { id:"L4", label:"Factor Scoring",       sub:"Momentum · Value · Quality · ERB · Low-vol · Carry" },
+  { id:"L5", label:"Technical Overlays",   sub:"200-DMA · RSI(14) · MACD · Relative strength" },
+  { id:"L6", label:"Tail Risk",            sub:"BIS early warning · Dalio gauge · Black swan checklist" },
+  { id:"∑",  label:"Composite Scoring",    sub:"Strategic × Tactical blend · Dampener applied" },
+  { id:"↑",  label:"Recommendation",       sub:"Primary overweight · Secondary · Avoid list" },
 ];
 
+// Staggered delays (ms) between each step — slow start, faster middle, slow end
+// Total ≈ 75s which matches median analysis time; last step holds until done
+const STEP_DELAYS = [0, 8000, 9000, 11000, 11000, 10000, 14000, 12000];
+
 function AnalysisScreen({ loadingStep }) {
-  const [elapsed, setElapsed]     = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [particles, setParticles] = useState([]);
+  const [elapsed, setElapsed]     = useState(0);
   const startRef = useRef(Date.now());
 
-  // Determine which layer is active from loadingStep string
+  // Map loadingStep string → layer index
   useEffect(() => {
-    const STEP_LABELS = ANALYSIS_LAYERS.map(l=>l.label);
-    const stepMap = {
+    const map = {
       "L1 · Scanning macro regime…": 0,
       "L2 · Mapping business cycle…": 1,
       "L3 · Credit & liquidity scan…": 2,
@@ -937,182 +939,152 @@ function AnalysisScreen({ loadingStep }) {
       "Generating recommendation…": 7,
       "Receiving analysis…": 7,
     };
-    const idx = stepMap[loadingStep];
+    const idx = map[loadingStep];
     if (idx !== undefined) setActiveIdx(idx);
   }, [loadingStep]);
 
-  // Elapsed timer
+  // Elapsed clock
   useEffect(() => {
     const t = setInterval(() => setElapsed(Math.floor((Date.now()-startRef.current)/1000)), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Generate floating particles once
-  useEffect(() => {
-    setParticles(Array.from({length:24}, (_, i) => ({
-      id: i,
-      x: Math.random()*100,
-      y: Math.random()*100,
-      size: 1 + Math.random()*2,
-      dur: 3 + Math.random()*6,
-      delay: Math.random()*4,
-      opacity: 0.1 + Math.random()*0.3,
-    })));
-  }, []);
-
-  const progress = Math.round(((activeIdx + 1) / ANALYSIS_LAYERS.length) * 100);
   const mins = Math.floor(elapsed/60);
-  const secs = elapsed % 60;
-  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  const secs = String(elapsed % 60).padStart(2,"0");
+  const elapsedStr = mins > 0 ? `${mins}:${secs}` : `0:${secs}`;
+
+  // Progress: each completed step = 1/8; active step gets partial credit based on elapsed
+  const baseProgress = (activeIdx / ANALYSIS_LAYERS.length) * 100;
+  // Crawls slowly from baseProgress toward next step's value while waiting
+  const stepProgress  = Math.min(baseProgress + 10, ((activeIdx + 0.85) / ANALYSIS_LAYERS.length) * 100);
 
   return (
-    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",
-      justifyContent:"center",position:"relative",overflow:"hidden"}}>
+    <div style={{
+      minHeight:"100vh", background:"var(--bg)",
+      display:"flex", flexDirection:"column",
+      alignItems:"center", justifyContent:"center",
+      fontFamily:"var(--font-data)",
+    }}>
+      {/* Subtle top accent */}
+      <div style={{
+        position:"fixed", top:0, left:0, right:0, height:2,
+        background:"linear-gradient(90deg, transparent 0%, var(--gold) 40%, var(--gold2) 60%, transparent 100%)",
+        opacity:0.7,
+      }}/>
 
-      {/* Ambient grid */}
-      <div style={{position:"absolute",inset:0,backgroundImage:
-        "linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px)",
-        backgroundSize:"48px 48px",opacity:0.3}}/>
-
-      {/* Scanline */}
-      <div style={{position:"absolute",left:0,right:0,height:2,
-        background:"linear-gradient(90deg,transparent,var(--gold),transparent)",
-        opacity:0.3,animation:"scanDown 4s linear infinite",top:0}}/>
-
-      {/* Floating particles */}
-      {particles.map(p => (
-        <div key={p.id} style={{position:"absolute",left:p.x+"%",top:p.y+"%",
-          width:p.size,height:p.size,borderRadius:"50%",background:"var(--gold)",
-          opacity:p.opacity,animation:`pulse ${p.dur}s ${p.delay}s ease-in-out infinite`}}/>
-      ))}
-
-      {/* Corner decorations */}
-      {[[0,0,"0 0 0 0","0 0 1px 0"],[0,1,"0 0 0 0","0 0 0 1px"],[1,0,"0 0 0 0","0 0 1px 0"],[1,1,"0 0 0 0","0 0 0 1px"]].map(([r,c],i) => (
-        <div key={i} style={{position:"absolute",
-          top: r===0 ? 32 : "auto", bottom: r===1 ? 32 : "auto",
-          left: c===0 ? 32 : "auto", right: c===1 ? 32 : "auto",
-          width:40,height:40,
-          borderTop: r===0 ? "1px solid var(--gold-dim)" : "none",
-          borderBottom: r===1 ? "1px solid var(--gold-dim)" : "none",
-          borderLeft: c===0 ? "1px solid var(--gold-dim)" : "none",
-          borderRight: c===1 ? "1px solid var(--gold-dim)" : "none",
-          opacity:0.6}}/>
-      ))}
-
-      {/* Main content */}
-      <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:680,padding:"0 24px"}}>
-
-        {/* Header */}
-        <div style={{textAlign:"center",marginBottom:48}}>
-          <BBLogo size={56}/>
-          <div style={{fontSize:28,fontFamily:"var(--font-display)",fontStyle:"italic",
-            color:"var(--text)",marginTop:20,marginBottom:6,letterSpacing:"-0.01em"}}>
-            Running Institutional Analysis
+      {/* Card */}
+      <div style={{
+        width:"100%", maxWidth:520, padding:"0 20px",
+      }}>
+        {/* Logo + title */}
+        <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:40}}>
+          <BBLogo size={36}/>
+          <div>
+            <div style={{fontSize:17, fontFamily:"var(--font-display)", fontWeight:600, color:"var(--text)", letterSpacing:"0.01em"}}>
+              BlackBridge
+            </div>
+            <div style={{fontSize:12, color:"var(--text3)", letterSpacing:"0.1em", textTransform:"uppercase"}}>
+              Running analysis
+            </div>
           </div>
-          <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-body)"}}>
-            Six-layer top-down framework · Bridgewater · AQR · BlackRock · Goldman Sachs
+          {/* Elapsed time — top right */}
+          <div style={{marginLeft:"auto", fontSize:13, color:"var(--text3)", fontVariantNumeric:"tabular-nums"}}>
+            {elapsedStr}
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div style={{marginBottom:40}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.1em"}}>
-              ANALYSIS PROGRESS
-            </span>
-            <div style={{display:"flex",gap:20,alignItems:"center"}}>
-              <span style={{fontSize:13,color:"var(--gold)",fontFamily:"var(--font-data)",fontWeight:500}}>
-                {progress}%
-              </span>
-              <span style={{fontSize:12,color:"var(--text3)",fontFamily:"var(--font-data)"}}>
-                {elapsedStr} elapsed
-              </span>
-            </div>
-          </div>
-          <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",
-            border:"1px solid var(--border)"}}>
-            <div style={{height:"100%",borderRadius:2,transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)",
-              width:progress+"%",
-              background:"linear-gradient(90deg,var(--gold2),var(--gold))",
-              boxShadow:"0 0 12px var(--gold), 0 0 24px var(--gold-dim)",
-              position:"relative",overflow:"hidden"}}>
-              {/* Shimmer effect on bar */}
-              <div style={{position:"absolute",inset:0,
-                background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)",
-                animation:"shimmer 1.5s ease-in-out infinite"}}/>
-            </div>
+        {/* Progress bar — thin, clean */}
+        <div style={{marginBottom:36}}>
+          <div style={{
+            height:2, background:"var(--border)", borderRadius:1, overflow:"hidden",
+          }}>
+            <div style={{
+              height:"100%", borderRadius:1,
+              background:"linear-gradient(90deg, var(--gold2), var(--gold))",
+              width: stepProgress + "%",
+              transition:"width 2.5s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}/>
           </div>
         </div>
 
-        {/* Layer list */}
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {/* Layer rows */}
+        <div style={{display:"flex", flexDirection:"column", gap:2}}>
           {ANALYSIS_LAYERS.map((layer, i) => {
-            const done    = i < activeIdx;
-            const active  = i === activeIdx;
-            const pending = i > activeIdx;
+            const done   = i < activeIdx;
+            const active = i === activeIdx;
             return (
-              <div key={layer.id}
-                style={{display:"flex",alignItems:"center",gap:16,padding:"12px 16px",
-                  borderRadius:7,transition:"all 0.4s ease",
-                  background: active ? "var(--bg2)" : done ? "transparent" : "transparent",
-                  border: active ? "1px solid var(--gold-dim)" : "1px solid transparent",
-                  animation: active ? "layerIn 0.4s ease" : "none",
-                  boxShadow: active ? "0 0 24px var(--gold-dim)" : "none",
+              <div key={layer.id} style={{
+                display:"flex", alignItems:"center", gap:14,
+                padding:"11px 14px",
+                borderRadius:6,
+                background: active ? "var(--bg2)" : "transparent",
+                border: `1px solid ${active ? "var(--border2)" : "transparent"}`,
+                transition:"background 0.3s, border-color 0.3s",
+              }}>
+                {/* Left indicator */}
+                <div style={{
+                  width:22, height:22, borderRadius:"50%", flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  background: done ? "var(--green2)" : active ? "var(--gold-dim)" : "var(--bg3)",
+                  border: `1px solid ${done ? "var(--green)" : active ? "var(--gold)" : "var(--border)"}`,
+                  fontSize:11,
+                  transition:"all 0.3s",
                 }}>
-                {/* Status dot */}
-                <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,display:"flex",
-                  alignItems:"center",justifyContent:"center",fontSize:14,
-                  background: done ? "var(--green2)20" : active ? "var(--gold-dim)" : "var(--bg3)",
-                  border: done ? "1px solid var(--green2)" : active ? "1px solid var(--gold)" : "1px solid var(--border)",
-                  color: done ? "var(--green)" : active ? "var(--gold)" : "var(--text3)",
-                  animation: active ? "goldGlow 2s ease-in-out infinite" : "none",
-                  transition:"all 0.4s ease",
-                }}>
-                  {done ? "✓" : layer.icon}
+                  {done
+                    ? <span style={{color:"var(--green)", fontSize:11}}>✓</span>
+                    : <span style={{
+                        color: active ? "var(--gold)" : "var(--text3)",
+                        fontSize:9, fontWeight:500, letterSpacing:"0.05em",
+                      }}>{layer.id}</span>
+                  }
                 </div>
 
-                {/* Layer info */}
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-data)",
-                      letterSpacing:"0.12em",flexShrink:0}}>{layer.id}</span>
-                    <span style={{fontSize:14,fontFamily:"var(--font-body)",
-                      color: done ? "var(--text3)" : active ? "var(--text)" : "var(--text3)",
-                      fontWeight: active ? 400 : 300,
-                      transition:"color 0.3s",
-                    }}>{layer.label}</span>
+                {/* Text */}
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{
+                    fontSize:14,
+                    color: done ? "var(--text3)" : active ? "var(--text)" : "var(--text3)",
+                    fontWeight: active ? 500 : 400,
+                    transition:"color 0.3s",
+                    display:"flex", alignItems:"center", gap:8,
+                  }}>
+                    {layer.label}
                     {active && (
-                      <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:4}}>
-                        {[0,1,2].map(d => (
-                          <div key={d} style={{width:4,height:4,borderRadius:"50%",
-                            background:"var(--gold)",
-                            animation:`dotBlink 1.2s ${d*0.25}s ease-in-out infinite`}}/>
-                        ))}
-                      </div>
+                      <span style={{
+                        display:"inline-block", width:6, height:6, borderRadius:"50%",
+                        background:"var(--gold)", opacity:0.9,
+                        animation:"pulse 1s ease-in-out infinite",
+                        flexShrink:0,
+                      }}/>
                     )}
                   </div>
-                  <div style={{fontSize:12,color:active?"var(--text3)":"var(--border2)",
-                    fontFamily:"var(--font-data)",marginTop:3,letterSpacing:"0.02em",
-                    transition:"color 0.3s",
-                  }}>{layer.sub}</div>
+                  <div style={{
+                    fontSize:12, color: active ? "var(--text3)" : "var(--border2)",
+                    marginTop:1, transition:"color 0.3s",
+                  }}>
+                    {layer.sub}
+                  </div>
                 </div>
 
-                {/* Right indicator */}
-                <div style={{flexShrink:0,fontSize:12,fontFamily:"var(--font-data)",
-                  color: done ? "var(--green)" : active ? "var(--gold)" : "var(--text3)",
-                  letterSpacing:"0.08em",
+                {/* Right status */}
+                <div style={{
+                  fontSize:11, letterSpacing:"0.08em", flexShrink:0,
+                  color: done ? "var(--green)" : active ? "var(--gold)" : "transparent",
+                  transition:"color 0.3s",
                 }}>
-                  {done ? "DONE" : active ? "RUNNING" : ""}
+                  {done ? "DONE" : active ? "ACTIVE" : "·"}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Footer note */}
-        <div style={{textAlign:"center",marginTop:36,fontSize:12,color:"var(--text3)",
-          fontFamily:"var(--font-data)",letterSpacing:"0.06em"}}>
-          Analysis typically takes 60–120 seconds · Web search active
+        {/* Footer */}
+        <div style={{
+          marginTop:32, textAlign:"center",
+          fontSize:12, color:"var(--text3)", letterSpacing:"0.04em",
+        }}>
+          Live web search active · typically 60–90 seconds
         </div>
       </div>
     </div>
@@ -1203,8 +1175,20 @@ export default function App() {
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
     const STEPS=["L1 · Scanning macro regime…","L2 · Mapping business cycle…","L3 · Credit & liquidity scan…","L4 · Factor scoring 11 sectors…","L5 · Technical overlays…","L6 · Tail risk computation…","Composite scoring…","Generating recommendation…"];
-    let si=0; setLoadingStep(STEPS[0]);
-    const timer=setInterval(()=>{ si++; if(si<STEPS.length) setLoadingStep(STEPS[si]); },2500);
+    // Staggered delays between steps (ms) — total ~75s matching median analysis time.
+    // Each delay is the gap BEFORE advancing to that step index.
+    // Final step stays active until the real response arrives.
+    const DELAYS = [0, 8000, 9000, 11000, 11000, 10000, 14000, 12000];
+    let si = 0;
+    setLoadingStep(STEPS[0]);
+    const timers = [];
+    let cumulative = 0;
+    for (let i = 1; i < STEPS.length; i++) {
+      cumulative += DELAYS[i];
+      const step = i;
+      timers.push(setTimeout(() => setLoadingStep(STEPS[step]), cumulative));
+    }
+    const clearAllTimers = () => timers.forEach(clearTimeout);
     try {
       const res=await fetch("/api/analyze",{
         method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin",
@@ -1214,12 +1198,12 @@ export default function App() {
           messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively. Score all 11 S&P 500 sector ETFs. Output ONLY the JSON report object.`}]
         })
       });
-      if(res.status===401){ clearInterval(timer); window.location.href="/login"; return; }
+      if(res.status===401){ clearAllTimers(); window.location.href="/login"; return; }
       if(!res.ok){
         const e=await res.json().catch(()=>({}));
         throw new Error(e.error?.message||e.error||`Server error ${res.status}`);
       }
-      clearInterval(timer); setLoadingStep("Receiving analysis…");
+      clearAllTimers(); setLoadingStep("Receiving analysis…");
       // Read the SSE stream — proxy sends pings to keep alive, then one final data event
       const reader=res.body.getReader(); const dec=new TextDecoder();
       let buf="", finalData=null;
@@ -1252,7 +1236,7 @@ export default function App() {
       setCurrentReport(report);
       saveReportRemote(report); // async — persist to Supabase in background
     } catch(err) {
-      clearInterval(timer);
+      clearAllTimers();
       setError(err.message||"Analysis failed. Please try again.");
     } finally { setLoading(false); setLoadingStep(""); }
   };
