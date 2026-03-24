@@ -808,8 +808,20 @@ export default function App() {
       });
       clearInterval(timer); setLoadingStep("✅ Processing institutional report…");
       if(res.status===401){ window.location.href="/login"; return; }
-      const data=await res.json();
-      if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
+
+      // Safe parse — Vercel may return HTML on timeout/gateway errors, not JSON
+      const rawText = await res.text();
+      let data;
+      try { data = JSON.parse(rawText); }
+      catch(_) {
+        // Vercel timed out or returned an HTML error page
+        if(res.status===504||res.status===502||res.status===524) {
+          throw new Error("Request timed out. The analysis takes 60–120s — upgrade to Vercel Pro (60s limit) or try again.");
+        }
+        throw new Error(`Server error (${res.status}): ${rawText.slice(0,120)}`);
+      }
+
+      if(!res.ok) throw new Error(data.error?.message||data.error||`API error ${res.status}`);
       const texts=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       if(!texts) throw new Error("No text content returned from API");
       const report=parseReport(texts);

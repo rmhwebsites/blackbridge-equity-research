@@ -1,16 +1,15 @@
 /**
  * Vercel Edge Middleware
- * Runs at the CDN edge BEFORE any page, asset, or API route is served.
- * Every request must carry a valid signed session cookie or it is blocked.
+ * Runs at the CDN edge before any page/asset/API is served.
  *
- * Protected routes: everything
- * Public routes:    /login  /api/login  /api/logout  (auth flow only)
+ * Edge Runtime HAS globalThis.crypto.subtle natively — no import needed.
+ * This is intentionally separate from the Node.js functions (api/*.js)
+ * which need `import { webcrypto } from "crypto"`.
  */
 
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout"];
+const PUBLIC = ["/login", "/api/login", "/api/logout"];
 
-// ── Crypto helpers (Web Crypto API — available in Edge Runtime) ────────────────
-async function hmacSign(secret, message) {
+async function signToken(secret, message) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw", enc.encode(secret),
@@ -18,60 +17,59 @@ async function hmacSign(secret, message) {
     false, ["sign"]
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  // base64url encode
   return btoa(String.fromCharCode(...new Uint8Array(sig)))
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-async function verifySessionCookie(cookieHeader, secret) {
+async function hasValidSession(cookieHeader, secret) {
   if (!cookieHeader || !secret) return false;
-  const match = cookieHeader.match(/(?:^|;\s*)bb_session=([^;]+)/);
-  if (!match) return false;
-  const token = match[1];
-  const expected = await hmacSign(secret, "bb-auth-session-v1");
-  // Constant-time comparison to prevent timing attacks
+  const m = cookieHeader.match(/(?:^|;\s*)bb_session=([^;]+)/);
+  if (!m) return false;
+  const token = m[1];
+  const expected = await signToken(secret, "bb-auth-session-v1");
   if (token.length !== expected.length) return false;
   let diff = 0;
-  for (let i = 0; i < token.length; i++) {
-    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
+  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
 }
 
-// ── Middleware entry point ────────────────────────────────────────────────────
 export default async function middleware(request) {
-  const url = new URL(request.url);
-  const path = url.pathname;
+  const { pathname } = new URL(request.url);
 
-  // Always allow the auth flow through
-  if (PUBLIC_PATHS.some(p => path === p || path.startsWith(p + "/"))) {
-    return; // pass through
-  }
+  // Always allow the auth endpoints through
+  if (PUBLIC.some(p => pathname === p || pathname.startsWith(p + "/"))) return;
 
-  // Static assets don't need auth (Vite build output: .js .css .svg etc.)
-  // BUT we do protect the index.html itself — no free ride to the shell
-  if (path.match(/\.(js|css|ico|png|svg|woff2?|ttf|map)$/)) {
-    const cookie = request.headers.get("cookie") || "";
-    const valid = await verifySessionCookie(cookie, process.env.SESSION_SECRET);
-    if (!valid) {
-      // Block asset too — prevents fingerprinting the app without auth
-      return new Response("Unauthorized", { status: 401 });
-    }
-    return; // pass through
-  }
+  // Static build assets (js/css/etc) — also block without session so app
+  // can't be fingerprinted, but allow _vercel internal paths
+  if (pathname.startsWith("/_vercel")) return;
 
-  // Verify session for everything else
   const cookie = request.headers.get("cookie") || "";
-  const valid = await verifySessionCookie(cookie, process.env.SESSION_SECRET);
+  const secret = process.env.SESSION_SECRET;
+
+  let valid = false;
+  try {
+    valid = await hasValidSession(cookie, secret);
+  } catch (_) {
+    valid = false;
+  }
 
   if (!valid) {
-    // Redirect to login, preserving the intended destination
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", path === "/" ? "" : path);
+    // Only set ?next for page navigations, not XHR/fetch calls
+    const isAjax = request.headers.get("accept")?.includes("application/json") ||
+                   request.headers.get("x-requested-with") === "XMLHttpRequest";
+    if (!isAjax && pathname !== "/") {
+      loginUrl.searchParams.set("next", pathname);
+    }
+    // For AJAX calls to /api/, return 401 JSON instead of redirect
+    if (pathname.startsWith("/api/")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     return Response.redirect(loginUrl.toString(), 302);
   }
-
-  // ✅ Authenticated — pass through
 }
 
 export const config = {
