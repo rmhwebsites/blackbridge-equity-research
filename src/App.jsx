@@ -961,181 +961,179 @@ function MacroSparkline({ reports, field, label, color="var(--green)" }) {
 
 // ─── ANALYSIS SCREEN ─────────────────────────────────────────────────────────
 const ANALYSIS_LAYERS = [
-  { id:"L1", label:"Macro Regime",         sub:"ISM PMI · CPI · Breakeven · DXY · AQR quadrant" },
-  { id:"L2", label:"Business Cycle",       sub:"Yield curve · New Orders-Inventory · CLI" },
-  { id:"L3", label:"Credit & Liquidity",   sub:"HY/IG OAS · Chicago Fed NFCI · VIX structure" },
-  { id:"L4", label:"Factor Scoring",       sub:"Momentum · Value · Quality · ERB · Low-vol · Carry" },
-  { id:"L5", label:"Technical Overlays",   sub:"200-DMA · RSI(14) · MACD · Relative strength" },
-  { id:"L6", label:"Tail Risk",            sub:"BIS early warning · Dalio gauge · Black swan checklist" },
-  { id:"∑",  label:"Composite Scoring",    sub:"Strategic × Tactical blend · Dampener applied" },
-  { id:"↑",  label:"Recommendation",       sub:"Primary overweight · Secondary · Avoid list" },
+  { id:"L1", label:"Macro Regime",       sub:"ISM PMI · CPI · 10Y breakeven · DXY" },
+  { id:"L2", label:"Business Cycle",     sub:"Yield curve · New Orders · CLI" },
+  { id:"L3", label:"Credit & Liquidity", sub:"HY/IG OAS · NFCI · VIX structure" },
+  { id:"L4", label:"Factor Scoring",     sub:"Momentum · Value · Quality · ERB" },
+  { id:"L5", label:"Technicals",         sub:"200-DMA · RSI(14) · MACD · Rel. strength" },
+  { id:"L6", label:"Tail Risk",          sub:"BIS · Dalio · Black swan checklist" },
+  { id:"\u2211",  label:"Composite Score",   sub:"Strategic + Tactical · Dampener" },
+  { id:"\u2191",  label:"Recommendation",    sub:"Primary · Secondary · Avoid list" },
 ];
 
+// Steps activate at these % thresholds of the expected 90s analysis duration.
+// Progress is driven by real elapsed time — no fixed timeouts, no sudden jumps.
+const STEP_AT = [0, 11, 22, 35, 49, 62, 75, 88];
 
 function AnalysisScreen({ loadingStep }) {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [elapsed, setElapsed]     = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
+  const EXPECTED = 90;
 
-  // Map loadingStep string → layer index
   useEffect(() => {
-    const map = {
-      "L1 · Scanning macro regime…": 0,
-      "L2 · Mapping business cycle…": 1,
-      "L3 · Credit & liquidity scan…": 2,
-      "L4 · Factor scoring 11 sectors…": 3,
-      "L5 · Technical overlays…": 4,
-      "L6 · Tail risk computation…": 5,
-      "Composite scoring…": 6,
-      "Generating recommendation…": 7,
-      "Receiving analysis…": 7,
-    };
-    const idx = map[loadingStep];
-    if (idx !== undefined) setActiveIdx(idx);
-  }, [loadingStep]);
-
-  // Elapsed clock
-  useEffect(() => {
-    const t = setInterval(() => setElapsed(Math.floor((Date.now()-startRef.current)/1000)), 1000);
+    const t = setInterval(() => {
+      setElapsed((Date.now() - startRef.current) / 1000);
+    }, 250);
     return () => clearInterval(t);
   }, []);
 
-  const mins = Math.floor(elapsed/60);
-  const secs = String(elapsed % 60).padStart(2,"0");
-  const elapsedStr = mins > 0 ? `${mins}:${secs}` : `0:${secs}`;
+  const apiStepIdx = {
+    "L1 · Scanning macro regime…": 0,
+    "L2 · Mapping business cycle…": 1,
+    "L3 · Credit & liquidity scan…": 2,
+    "L4 · Factor scoring 11 sectors…": 3,
+    "L5 · Technical overlays…": 4,
+    "L6 · Tail risk computation…": 5,
+    "Composite scoring…": 6,
+    "Generating recommendation…": 7,
+    "Receiving analysis…": 7,
+  }[loadingStep];
 
-  // Progress: each completed step = 1/8; active step gets partial credit based on elapsed
-  const baseProgress = (activeIdx / ANALYSIS_LAYERS.length) * 100;
-  // Crawls slowly from baseProgress toward next step's value while waiting
-  const stepProgress  = Math.min(baseProgress + 10, ((activeIdx + 0.85) / ANALYSIS_LAYERS.length) * 100);
+  const pct = Math.min(99, (elapsed / EXPECTED) * 100);
+  let timeStep = STEP_AT.filter(t => pct >= t).length - 1;
+  timeStep = Math.min(timeStep, ANALYSIS_LAYERS.length - 1);
+  const activeIdx = Math.max(timeStep, apiStepIdx ?? 0);
+
+  const stepPct  = STEP_AT[activeIdx] ?? 88;
+  const nextPct  = STEP_AT[activeIdx + 1] ?? 100;
+  const fill     = (pct - stepPct) / Math.max(1, nextPct - stepPct);
+  const progress = Math.min(99, stepPct + (nextPct - stepPct) * Math.min(1, fill * 0.7));
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = String(Math.floor(elapsed % 60)).padStart(2, "0");
+  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${Math.floor(elapsed)}s`;
+
+  const R = 80, CX = 100, CY = 100;
+  const circ = 2 * Math.PI * R;
+  const offset = circ * (1 - progress / 100);
 
   return (
-    <div style={{
-      minHeight:"100vh", background:"var(--bg)",
-      display:"flex", flexDirection:"column",
-      alignItems:"center", justifyContent:"center",
-      fontFamily:"var(--font-data)",
-    }}>
-      {/* Subtle top accent */}
-      <div style={{
-        position:"fixed", top:0, left:0, right:0, height:2,
-        background:"linear-gradient(90deg, transparent 0%, var(--gold) 40%, var(--gold2) 60%, transparent 100%)",
-        opacity:0.7,
-      }}/>
-
-      {/* Card */}
-      <div style={{
-        width:"100%", maxWidth:520, padding:"0 20px",
-      }}>
-        {/* Logo + title */}
-        <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:40}}>
-          <BBLogo size={36}/>
-          <div>
-            <div style={{fontSize:17, fontFamily:"var(--font-display)", fontWeight:600, color:"var(--text)", letterSpacing:"0.01em"}}>
-              BlackBridge
-            </div>
-            <div style={{fontSize:12, color:"var(--text3)", letterSpacing:"0.1em", textTransform:"uppercase"}}>
-              Running analysis
-            </div>
-          </div>
-          {/* Elapsed time — top right */}
-          <div style={{marginLeft:"auto", fontSize:13, color:"var(--text3)", fontVariantNumeric:"tabular-nums"}}>
-            {elapsedStr}
-          </div>
+    <div style={{ minHeight:"100vh", background:"var(--bg)", color:"var(--text)", display:"flex", flexDirection:"column" }}>
+      {/* Top bar */}
+      <div style={{ padding:"14px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid var(--border)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <BBLogo size={26}/>
+          <span style={{ fontSize:13, fontFamily:"var(--font-display)", fontWeight:600 }}>BlackBridge</span>
+          <span style={{ fontSize:10, color:"var(--gold)", fontFamily:"var(--font-data)", letterSpacing:"0.1em", textTransform:"uppercase", opacity:0.8 }}>Equity Research</span>
         </div>
-
-        {/* Progress bar — thin, clean */}
-        <div style={{marginBottom:36}}>
-          <div style={{
-            height:2, background:"var(--border)", borderRadius:1, overflow:"hidden",
-          }}>
-            <div style={{
-              height:"100%", borderRadius:1,
-              background:"linear-gradient(90deg, var(--gold2), var(--gold))",
-              width: stepProgress + "%",
-              transition:"width 2.5s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}/>
+        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <div style={{ width:5, height:5, borderRadius:"50%", background:"var(--green)", animation:"pulse 1.5s ease-in-out infinite" }}/>
+            <span style={{ fontSize:11, color:"var(--text3)", fontFamily:"var(--font-data)" }}>Web search active</span>
           </div>
+          <span style={{ fontSize:12, color:"var(--text3)", fontFamily:"var(--font-data)", fontVariantNumeric:"tabular-nums" }}>{elapsedStr}</span>
         </div>
+      </div>
 
-        {/* Layer rows */}
-        <div style={{display:"flex", flexDirection:"column", gap:2}}>
-          {ANALYSIS_LAYERS.map((layer, i) => {
-            const done   = i < activeIdx;
-            const active = i === activeIdx;
-            return (
-              <div key={layer.id} style={{
-                display:"flex", alignItems:"center", gap:14,
-                padding:"11px 14px",
-                borderRadius:6,
-                background: active ? "var(--bg2)" : "transparent",
-                border: `1px solid ${active ? "var(--border2)" : "transparent"}`,
-                transition:"background 0.3s, border-color 0.3s",
-              }}>
-                {/* Left indicator */}
-                <div style={{
-                  width:22, height:22, borderRadius:"50%", flexShrink:0,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  background: done ? "var(--green2)" : active ? "var(--gold-dim)" : "var(--bg3)",
-                  border: `1px solid ${done ? "var(--green)" : active ? "var(--gold)" : "var(--border)"}`,
-                  fontSize:11,
-                  transition:"all 0.3s",
-                }}>
-                  {done
-                    ? <span style={{color:"var(--green)", fontSize:11}}>✓</span>
-                    : <span style={{
-                        color: active ? "var(--gold)" : "var(--text3)",
-                        fontSize:9, fontWeight:500, letterSpacing:"0.05em",
-                      }}>{layer.id}</span>
-                  }
-                </div>
+      {/* Body */}
+      <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 28px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:60, maxWidth:860, width:"100%" }}>
 
-                {/* Text */}
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{
-                    fontSize:14,
-                    color: done ? "var(--text3)" : active ? "var(--text)" : "var(--text3)",
-                    fontWeight: active ? 500 : 400,
-                    transition:"color 0.3s",
-                    display:"flex", alignItems:"center", gap:8,
-                  }}>
-                    {layer.label}
-                    {active && (
-                      <span style={{
-                        display:"inline-block", width:6, height:6, borderRadius:"50%",
-                        background:"var(--gold)", opacity:0.9,
-                        animation:"pulse 1s ease-in-out infinite",
-                        flexShrink:0,
-                      }}/>
-                    )}
-                  </div>
-                  <div style={{
-                    fontSize:12, color: active ? "var(--text3)" : "var(--border2)",
-                    marginTop:1, transition:"color 0.3s",
-                  }}>
-                    {layer.sub}
-                  </div>
-                </div>
-
-                {/* Right status */}
-                <div style={{
-                  fontSize:11, letterSpacing:"0.08em", flexShrink:0,
-                  color: done ? "var(--green)" : active ? "var(--gold)" : "transparent",
-                  transition:"color 0.3s",
-                }}>
-                  {done ? "DONE" : active ? "ACTIVE" : "·"}
-                </div>
+          {/* Orbital ring */}
+          <div style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--border)" strokeWidth="1.5"/>
+              <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--gold)" strokeWidth="1.5"
+                strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+                style={{ transform:"rotate(-90deg)", transformOrigin:"100px 100px", transition:"stroke-dashoffset 0.5s ease" }}/>
+              {ANALYSIS_LAYERS.map((layer, i) => {
+                const angle = (i / ANALYSIS_LAYERS.length) * 2 * Math.PI - Math.PI / 2;
+                const nx = CX + R * Math.cos(angle);
+                const ny = CY + R * Math.sin(angle);
+                const done = i < activeIdx, active = i === activeIdx;
+                return (
+                  <g key={i}>
+                    <circle cx={nx} cy={ny} r={active ? 5 : 3.5}
+                      fill={done ? "var(--green)" : active ? "var(--gold)" : "var(--border2)"}
+                      style={{ transition:"all 0.4s ease" }}/>
+                    {active && <circle cx={nx} cy={ny} r={9} fill="none" stroke="var(--gold)"
+                      strokeWidth="1" opacity="0.3" style={{ animation:"pulse 1.5s ease-in-out infinite" }}/>}
+                  </g>
+                );
+              })}
+              <text x={CX} y={CY-8} textAnchor="middle" fill="var(--gold)" fontSize="20"
+                fontWeight="600" fontFamily="var(--font-data)">{Math.round(progress)}%</text>
+              <text x={CX} y={CY+10} textAnchor="middle" fill="var(--text3)" fontSize="8.5"
+                letterSpacing="0.14em" fontFamily="var(--font-data)">ANALYSING</text>
+              <text x={CX} y={CY+23} textAnchor="middle" fill="var(--text3)" fontSize="8.5"
+                letterSpacing="0.1em" fontFamily="var(--font-data)">{activeIdx+1} OF {ANALYSIS_LAYERS.length}</text>
+            </svg>
+            <div style={{ textAlign:"center", maxWidth:170 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:"var(--gold)", fontFamily:"var(--font-data)", letterSpacing:"0.06em", marginBottom:3 }}>
+                {ANALYSIS_LAYERS[activeIdx]?.id} · {ANALYSIS_LAYERS[activeIdx]?.label}
               </div>
-            );
-          })}
-        </div>
+              <div style={{ fontSize:10, color:"var(--text3)", fontFamily:"var(--font-data)", lineHeight:1.5 }}>
+                {ANALYSIS_LAYERS[activeIdx]?.sub}
+              </div>
+            </div>
+          </div>
 
-        {/* Footer */}
-        <div style={{
-          marginTop:32, textAlign:"center",
-          fontSize:12, color:"var(--text3)", letterSpacing:"0.04em",
-        }}>
-          Live web search active · typically 60–90 seconds
+          {/* Steps panel */}
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:20, fontFamily:"var(--font-display)", fontStyle:"italic", fontWeight:600, color:"var(--text)", marginBottom:4 }}>
+                Running Institutional Analysis
+              </div>
+              <div style={{ fontSize:12, color:"var(--text3)", fontFamily:"var(--font-body)" }}>
+                Six-layer top-down framework · Bridgewater · AQR · BlackRock
+              </div>
+            </div>
+            <div style={{ height:2, background:"var(--border)", borderRadius:1, overflow:"hidden", marginBottom:24 }}>
+              <div style={{ height:"100%", background:"linear-gradient(90deg,var(--gold2),var(--gold))", width:progress+"%", borderRadius:1, transition:"width 0.5s ease" }}/>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+              {ANALYSIS_LAYERS.map((layer, i) => {
+                const done = i < activeIdx, active = i === activeIdx, future = i > activeIdx;
+                return (
+                  <div key={i} style={{
+                    display:"flex", alignItems:"center", gap:12, padding:"8px 10px", borderRadius:5,
+                    background: active ? "var(--bg2)" : "transparent",
+                    border:`1px solid ${active ? "var(--border2)" : "transparent"}`,
+                    transition:"all 0.3s ease",
+                  }}>
+                    <div style={{
+                      width:18, height:18, borderRadius:"50%", flexShrink:0,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      background: done ? "#15875A20" : active ? "#C9A84C12" : "transparent",
+                      border:`1px solid ${done ? "var(--green2)" : active ? "var(--gold)" : "var(--border)"}`,
+                      transition:"all 0.3s",
+                    }}>
+                      {done
+                        ? <span style={{ color:"var(--green)", fontSize:9, lineHeight:1 }}>✓</span>
+                        : <span style={{ fontSize:7, fontWeight:600, color: active ? "var(--gold)" : "var(--text3)", fontFamily:"var(--font-data)" }}>{layer.id}</span>
+                      }
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <span style={{
+                        fontSize:13, fontFamily:"var(--font-body)",
+                        color: done ? "var(--text3)" : active ? "var(--text)" : "var(--text3)",
+                        opacity: future ? 0.45 : 1, transition:"all 0.3s",
+                      }}>{layer.label}</span>
+                      {active && <span style={{ fontSize:10, color:"var(--text3)", fontFamily:"var(--font-data)", marginLeft:8, opacity:0.6 }}>{layer.sub}</span>}
+                    </div>
+                    <span style={{
+                      fontSize:9, fontFamily:"var(--font-data)", letterSpacing:"0.1em",
+                      color: done ? "var(--green2)" : active ? "var(--gold)" : "transparent",
+                      flexShrink:0, transition:"color 0.3s",
+                    }}>{done ? "DONE" : active ? "···" : ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ marginTop:20, fontSize:10, color:"var(--text3)", fontFamily:"var(--font-data)", letterSpacing:"0.04em" }}>
+              Typically 60–90 seconds · Do not close this tab
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1228,21 +1226,12 @@ export default function App() {
 
   const runAnalysis=async()=>{
     setLoading(true); setError(null); setTab("dashboard"); setSelectedDate(null); setSelectedSector(null);
+    setLoadingStep("L1 · Scanning macro regime…");
+    // AnalysisScreen advances steps automatically based on real elapsed time.
+    // The STEPS strings only serve as a final override when the API stream arrives.
     const STEPS=["L1 · Scanning macro regime…","L2 · Mapping business cycle…","L3 · Credit & liquidity scan…","L4 · Factor scoring 11 sectors…","L5 · Technical overlays…","L6 · Tail risk computation…","Composite scoring…","Generating recommendation…"];
-    // Staggered delays between steps (ms) — total ~75s matching median analysis time.
-    // Each delay is the gap BEFORE advancing to that step index.
-    // Final step stays active until the real response arrives.
-    const DELAYS = [0, 8000, 9000, 11000, 11000, 10000, 14000, 12000];
-    let si = 0;
-    setLoadingStep(STEPS[0]);
-    const timers = [];
-    let cumulative = 0;
-    for (let i = 1; i < STEPS.length; i++) {
-      cumulative += DELAYS[i];
-      const step = i;
-      timers.push(setTimeout(() => setLoadingStep(STEPS[step]), cumulative));
-    }
-    const clearAllTimers = () => timers.forEach(clearTimeout);
+    // No setTimeout timers — timing is purely elapsed-time-driven in AnalysisScreen.
+    // We do nothing here until the response arrives.
     try {
       const res=await fetch("/api/analyze",{
         method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin",
@@ -1252,12 +1241,12 @@ export default function App() {
           messages:[{role:"user",content:`Today is ${new Date().toISOString().split("T")[0]}. Execute the full six-layer institutional market analysis. Use web search extensively. Score all 11 S&P 500 sector ETFs. Output ONLY the JSON report object.`}]
         })
       });
-      if(res.status===401){ clearAllTimers(); window.location.href="/login"; return; }
+      if(res.status===401){ window.location.href="/login"; return; }
       if(!res.ok){
         const e=await res.json().catch(()=>({}));
         throw new Error(e.error?.message||e.error||`Server error ${res.status}`);
       }
-      clearAllTimers(); setLoadingStep("Receiving analysis…");
+      setLoadingStep("Receiving analysis…");
       // Read the SSE stream — proxy sends pings to keep alive, then one final data event
       const reader=res.body.getReader(); const dec=new TextDecoder();
       let buf="", finalData=null;
@@ -1289,7 +1278,7 @@ export default function App() {
       setCurrentReport(report);
       saveReportRemote(report); // async — persist to Supabase in background
     } catch(err) {
-      clearAllTimers();
+      
       setError(err.message||"Analysis failed. Please try again.");
     } finally { setLoading(false); setLoadingStep(""); }
   };
