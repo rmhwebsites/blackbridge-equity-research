@@ -1265,13 +1265,25 @@ export default function App() {
         }
       }
       if(!finalData) throw new Error("No response received from analysis. Please try again.");
-      const texts = (finalData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      if (!texts) throw new Error("No text content in response. Please try again.");
+
+      // Find the text block that contains the JSON report.
+      // The model sometimes outputs a prose preamble ("I need more data…") before
+      // the actual JSON — we want the block whose trimmed content starts with '{'.
+      const allTextBlocks = (finalData.content||[])
+        .filter(b => b.type==="text")
+        .map(b => b.text || "");
+
+      // Prefer the last block that starts with '{', fallback to last block overall
+      const jsonBlock = [...allTextBlocks].reverse().find(t => t.trimStart().startsWith("{"))
+                     || allTextBlocks[allTextBlocks.length - 1]
+                     || "";
+
+      if (!jsonBlock) throw new Error("No text content in response. Please try again.");
       let report;
       try {
-        report = parseReport(texts);
+        report = parseReport(jsonBlock);
       } catch (parseErr) {
-        throw new Error(`Parse failed: ${parseErr.message} — Preview: ${texts.slice(0,120).replace(/\n/g," ")}`);
+        throw new Error(`Parse failed: ${parseErr.message} — Preview: ${jsonBlock.slice(0,120).replace(/\n/g," ")}`);
       }
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
       saveReports(updated);
