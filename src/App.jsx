@@ -15,7 +15,6 @@ const BRAND = `
     --gold2:     #E8C96A;
     --gold-dim:  #5C4A1E;
     --platinum:  #8C96A8;
-    --silver:    #B8C4D0;
     --text:      #E8EDF5;
     --text2:     #9BA8BC;
     --text3:     #5A6478;
@@ -25,7 +24,6 @@ const BRAND = `
     --red2:      #A02828;
     --amber:     #E8A020;
     --amber2:    #A06F10;
-    --blue:      #3B82F6;
     --font-display: 'Playfair Display', Georgia, serif;
     --font-data:    'DM Mono', 'Courier New', monospace;
     --font-body:    'Source Serif 4', Georgia, serif;
@@ -37,7 +35,6 @@ const BRAND = `
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-  @keyframes spin     { to { transform: rotate(360deg); } }
   @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.4} }
   @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
   @keyframes shimmer  { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
@@ -83,11 +80,11 @@ const REGIME_COLORS = {
 };
 const TAIL_COLORS = { LOW:"#1DB87A", NORMAL:"#5A6478", ELEVATED:"#E8A020", HIGH:"#E87020", CRISIS:"#E84040" };
 const SIGNAL_STYLE = {
-  STRONG_OVERWEIGHT: { bg:"#061A10", text:"#1DB87A", border:"#15875A" },
+  STRONG_OVERWEIGHT: { bg:"#0A2E1A", text:"#22EE96", border:"#1DB87A" },
   OVERWEIGHT:        { bg:"#061A10", text:"#1DB87A", border:"#0A3020" },
   NEUTRAL:           { bg:"#141720", text:"#8C96A8", border:"#1E2433" },
   UNDERWEIGHT:       { bg:"#1A0808", text:"#E84040", border:"#3A1010" },
-  STRONG_UNDERWEIGHT:{ bg:"#1A0808", text:"#E84040", border:"#A02828" },
+  STRONG_UNDERWEIGHT:{ bg:"#2E0808", text:"#FF6060", border:"#E84040" },
 };
 
 // ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
@@ -228,12 +225,10 @@ function MacroTile({ label, value, sub, trend }) {
 }
 
 // ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
-function Card({ children, style={}, accent=false }) {
+function Card({ children, style={} }) {
   return (
     <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:8,
-      padding:20, position:"relative", overflow:"hidden", ...style }}>
-      {accent && <div style={{ position:"absolute", top:0, left:0, right:0, height:2,
-        background:"linear-gradient(90deg, var(--gold), var(--gold2))" }}/>}
+      padding:20, ...style }}>
       {children}
     </div>
   );
@@ -309,7 +304,6 @@ function FactorRow({ label, value, signal }) {
 
 // ─── S&P 500 vs RECOMMENDATION PERFORMANCE CHART ────────────────────────────
 function PerformanceChart({ reports }) {
-  const containerRef = useRef(null);
   if (reports.length < 2) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:160,
       color:"var(--text3)", fontSize:14, fontFamily:"var(--font-data)" }}>
@@ -347,8 +341,6 @@ function PerformanceChart({ reports }) {
 
   const polyline = (pts) => pts.map(p=>`${p.x},${p.y}`).join(" ");
   const area     = (pts, baseY) => `M${pts[0].x},${baseY} ` + pts.map(p=>`L${p.x},${p.y}`).join(" ") + ` L${pts[pts.length-1].x},${baseY} Z`;
-  const midY = PAD.top + innerH/2;
-
   return (
     <div>
       <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:10 }}>
@@ -448,7 +440,7 @@ function SectorHeatmap({ reports }) {
                 <div key={ri} style={{ flex:1, height:22, background:c, opacity, borderRadius:2,
                   margin:"0 1px", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   {score!=null && <span style={{ fontSize:15.5, color:"var(--text)", fontFamily:"var(--font-data)",
-                    opacity:2.5 }}>{score.toFixed(1)}</span>}
+                    opacity:1 }}>{score.toFixed(1)}</span>}
                 </div>
               );
             })}
@@ -888,7 +880,7 @@ function MacroSparkline({ reports, field, label, color="var(--green)" }) {
     <div style={{display:"flex",alignItems:"center",gap:8}}>
       <svg width={W} height={H} style={{flexShrink:0}}>
         <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" opacity="0.7"/>
-        <circle cx={(vals.length-1)/(vals.length-1)*W} cy={H-((last-min)/range)*H} r="2" fill={color}/>
+        <circle cx={W} cy={H-((last-min)/range)*H} r="2" fill={color}/>
       </svg>
       <div>
         <div style={{fontSize:14,color:"var(--text3)",fontFamily:"var(--font-data)",letterSpacing:"0.08em"}}>{label}</div>
@@ -1478,7 +1470,7 @@ export default function App() {
               <MacroSparkline reports={reports} field="tenYearYield" label="10Y Yield" color="var(--amber)"/>
               <MacroSparkline reports={reports} field="dxy" label="DXY" color="var(--platinum)"/>
               <MacroSparkline reports={reports} field="wtiCrude" label="WTI Crude" color="var(--amber)"/>
-              <MacroSparkline reports={reports} field="unemployment" label="Unemployment" color="var(--blue)"/>
+              <MacroSparkline reports={reports} field="unemployment" label="Unemployment" color="var(--platinum)"/>
             </div>
           </Card>
         )}
