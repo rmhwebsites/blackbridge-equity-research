@@ -1120,7 +1120,7 @@ export default function App() {
       })
       .then(data => {
         if (!data || !Array.isArray(data) || data.length === 0) return;
-        // Merge: Supabase wins for any date that exists in both
+        // Merge Supabase reports with any local-only reports, sort chronologically
         setReports(prev => {
           const merged = [...prev];
           data.forEach(remote => {
@@ -1129,11 +1129,14 @@ export default function App() {
             else merged.push(remote);
           });
           const sorted = merged.sort((a,b) => a.reportDate < b.reportDate ? -1 : 1);
-          // Update localStorage cache
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted)); } catch(_) {}
-          // Set current to the latest report in the final merged+sorted array
-          if (sorted.length > 0) setCurrentReport(sorted[sorted.length - 1]);
           return sorted;
+        });
+        // Set current report outside the updater (state updaters must be pure)
+        setCurrentReport(curr => {
+          // Keep a user-selected date if one is active; otherwise use latest from Supabase
+          if (curr && data.find(r => r.reportDate === curr.reportDate)) return curr;
+          return data[data.length - 1];
         });
       })
       .catch(() => {}); // offline or Supabase down — localStorage cache is fine

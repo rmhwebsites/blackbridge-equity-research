@@ -65,8 +65,9 @@ export default async function handler(req) {
   }
 
   const supabaseBase = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseBase) {
-    return new Response(JSON.stringify({ error: "SUPABASE_URL not configured" }), {
+  const supabaseKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!supabaseBase || !supabaseKey) {
+    return new Response(JSON.stringify({ error: "Supabase not configured" }), {
       status: 500, headers: { "Content-Type": "application/json" }
     });
   }
