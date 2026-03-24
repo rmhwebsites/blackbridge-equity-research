@@ -108,46 +108,88 @@ OUTPUT: Single valid JSON only. No markdown, no extra text. All string values mu
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-// Sanitise JSON from LLMs: escape bare control characters inside string values
-// using a proper state machine (regex can't reliably track string boundaries).
-function sanitizeJSON(str) {
-  let out = "", inStr = false, i = 0;
-  while (i < str.length) {
-    const ch = str[i], code = str.charCodeAt(i);
-    if (inStr) {
-      if (ch === "\\") { out += ch + (str[i+1]||""); i += 2; continue; }  // skip escape seq
-      if (ch === '"')  { inStr = false; out += ch; i++; continue; }
-      // Bare control character inside string — escape it
-      if (code < 0x20) {
-        if      (ch === "\n") out += "\\n";
-        else if (ch === "\r") out += "\\r";
-        else if (ch === "\t") out += "\\t";
-        else out += "\\u" + code.toString(16).padStart(4,"0");
-        i++; continue;
-      }
-    } else {
-      if (ch === '"') inStr = true;
+// Determines whether a quote at `pos` in `str` is a string terminator.
+// A quote is a terminator when the next non-whitespace character is , : } ] or EOF.
+function isTerminatorQuote(str, pos) {
+  let i = pos + 1;
+  while (i < str.length && /\s/.test(str[i])) i++;
+  return i >= str.length || /[,:}\]]/.test(str[i]);
+}
+
+// Multi-pass JSON sanitiser — handles all common LLM JSON failures:
+//   Pass 1: direct JSON.parse
+//   Pass 2: fix bare control characters (\n \r \t) inside strings
+//   Pass 3: fix trailing commas before } or ]
+//   Pass 4: fix bare (unescaped) double-quotes inside string values
+//           using context-aware terminator detection
+function robustParseJSON(raw) {
+  // Strip markdown fences and extract outermost { … }
+  let s = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const start = s.indexOf("{"), end = s.lastIndexOf("}");
+  if (start !== -1 && end !== -1) s = s.slice(start, end + 1);
+
+  // Pass 1 — direct
+  try { return JSON.parse(s); } catch (_) {}
+
+  // Pass 2 — fix bare control chars inside strings
+  function fixControls(str) {
+    let out = "", inStr = false, i = 0;
+    while (i < str.length) {
+      const ch = str[i], code = str.charCodeAt(i);
+      if (inStr) {
+        if (ch === "\\") { out += ch + (str[i+1]||""); i += 2; continue; }
+        if (ch === '"')  { inStr = false; out += ch; i++; continue; }
+        if (code < 0x20) {
+          out += ch==="\n"?"\\n":ch==="\r"?"\\r":ch==="\t"?"\\t":"\\u"+code.toString(16).padStart(4,"0");
+          i++; continue;
+        }
+      } else { if (ch === '"') inStr = true; }
+      out += ch; i++;
     }
-    out += ch; i++;
+    return out;
   }
-  return out;
+  const s2 = fixControls(s);
+  try { return JSON.parse(s2); } catch (_) {}
+
+  // Pass 3 — fix trailing commas
+  const s3 = fixControls(s.replace(/,(\s*[}\]])/g, "$1"));
+  try { return JSON.parse(s3); } catch (_) {}
+
+  // Pass 4 — fix bare unescaped quotes inside string values
+  // Walk the JSON char-by-char; when inside a string value, a " that is NOT
+  // followed by , : } ] (i.e. not a terminator) is escaped as \"
+  function fixBareQuotes(str) {
+    let out = "", i = 0;
+    while (i < str.length) {
+      const ch = str[i];
+      if (ch !== '"') { out += ch; i++; continue; }
+      // Opening quote — read the string
+      out += '"'; i++;
+      while (i < str.length) {
+        const c = str[i];
+        if (c === "\\") { out += c + (str[i+1]||""); i += 2; continue; }
+        if (c === '"') {
+          if (isTerminatorQuote(str, i)) { out += '"'; i++; break; }
+          out += '\\"'; i++; continue; // embedded bare quote → escape
+        }
+        const code = c.charCodeAt(0);
+        if (code < 0x20) {
+          out += c==="\n"?"\\n":c==="\r"?"\\r":c==="\t"?"\\t":"\\u"+code.toString(16).padStart(4,"0");
+          i++; continue;
+        }
+        out += c; i++;
+      }
+    }
+    return out;
+  }
+  const s4 = fixBareQuotes(s);
+  try { return JSON.parse(s4); } catch (_) {}
+
+  throw new Error("Could not parse report JSON after 4 repair passes. Raw output may be severely malformed.");
 }
 
 function parseReport(text) {
-  // Strip markdown fences
-  let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-
-  // Extract outermost JSON object
-  const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-  if (s !== -1 && e !== -1) clean = clean.slice(s, e + 1);
-
-  // Try direct parse
-  try { return JSON.parse(clean); } catch (_) {}
-
-  // Sanitise control characters inside strings and retry
-  try { return JSON.parse(sanitizeJSON(clean)); } catch (_) {}
-
-  throw new Error("Could not parse report JSON. The model may have returned malformed output.");
+  return robustParseJSON(text);
 }
 function fmtDate(d, short=false) {
   if (!d) return "—";
@@ -1222,8 +1264,7 @@ export default function App() {
       try {
         report = parseReport(texts);
       } catch (parseErr) {
-        // Show the position of the failure to help diagnose
-        throw new Error(`Report JSON invalid: ${parseErr.message}. The model may have included unescaped characters in a text field.`);
+        throw new Error(`Parse failed: ${parseErr.message} — Preview: ${texts.slice(0,120).replace(/\n/g," ")}`);
       }
       const updated=[...reports.filter(r=>r.reportDate!==report.reportDate),report];
       saveReports(updated);
